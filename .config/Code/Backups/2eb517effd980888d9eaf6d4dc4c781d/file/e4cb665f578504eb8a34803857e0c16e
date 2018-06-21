@@ -1,0 +1,17 @@
+file:///home/mick19955/Workspaces/first_python/main.py
+import string
+
+msg = "hello world"
+print(msg)
+
+cap = msg.capitalize()
+print(cap)
+
+new = cap.upper()
+print(new)
+
+swap = new.swapcase()
+print(swap)
+
+
+

@@ -1,0 +1,21 @@
+set $wallpaper /home/mick19955/Downloads/Wallpaper.jpg
+
+set $background #1c1519
+set $foreground #80e0e0
+
+set $color0 #1c1519
+set $color1 #504E4F
+set $color2 #5C605E
+set $color3 #874235
+set $color4 #1C9C9E
+set $color5 #4F9295
+set $color6 #449F9F
+set $color7 #80e0e0
+set $color8 #599c9c
+set $color9 #504E4F
+set $color10 #5C605E
+set $color11 #874235
+set $color12 #1C9C9E
+set $color13 #4F9295
+set $color14 #449F9F
+set $color15 #80e0e0

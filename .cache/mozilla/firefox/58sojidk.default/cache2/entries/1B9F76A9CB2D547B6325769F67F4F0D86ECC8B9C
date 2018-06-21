@@ -1,0 +1,847 @@
+/**
+ * AutoCompleter Object, refactored closure style from
+ * jQuery autocomplete plugin
+ * @param {Object=} options Settings
+ * @constructor
+ */
+var AutoCompleter = function (options) {
+
+    /**
+     * Default options for autocomplete plugin
+     */
+    var defaults = {
+        promptText: '',
+        autocompleteMultiple: true,
+        multipleSeparator: ' ',//a single character
+        inputClass: 'acInput',
+        loadingClass: 'acLoading',
+        resultsClass: 'acResults',
+        selectClass: 'acSelect',
+        queryParamName: 'q',
+        limitParamName: 'limit',
+        extraParams: {},
+        lineSeparator: '\n',
+        cellSeparator: '|',
+        minChars: 2,
+        maxItemsToShow: 10,
+        delay: 400,
+        useCache: true,
+        maxCacheLength: 10,
+        matchSubset: true,
+        matchCase: false,
+        matchInside: true,
+        mustMatch: false,
+        preloadData: false,
+        selectFirst: false,
+        stopCharRegex: /\s+/,
+        selectOnly: false,
+        formatItem: null,           // TBD
+        onItemSelect: false,
+        autoFill: false,
+        filterResults: true,
+        sortResults: true,
+        sortFunction: false,
+        onNoMatch: false
+    };
+
+    /**
+     * Options dictionary
+     * @type Object
+     * @private
+     */
+    this.options = $.extend({}, defaults, options);
+
+    /**
+     * Cached data
+     * @type Object
+     * @private
+     */
+    this.cacheData_ = {};
+
+    /**
+     * Number of cached data items
+     * @type number
+     * @private
+     */
+    this.cacheLength_ = 0;
+
+    /**
+     * Class name to mark selected item
+     * @type string
+     * @private
+     */
+    this.selectClass_ = 'jquery-autocomplete-selected-item';
+
+    /**
+     * Handler to activation timeout
+     * @type ?number
+     * @private
+     */
+    this.keyTimeout_ = null;
+
+    /**
+     * Last key pressed in the input field (store for behavior)
+     * @type ?number
+     * @private
+     */
+    this.lastKeyPressed_ = null;
+
+    /**
+     * Last value processed by the autocompleter
+     * @type ?string
+     * @private
+     */
+    this.lastProcessedValue_ = null;
+
+    /**
+     * Last value selected by the user
+     * @type ?string
+     * @private
+     */
+    this.lastSelectedValue_ = null;
+
+    /**
+     * Is this autocompleter active?
+     * @type boolean
+     * @private
+     */
+    this.active_ = false;
+
+    /**
+     * Is it OK to finish on blur?
+     * @type boolean
+     * @private
+     */
+    this.finishOnBlur_ = true;
+
+    this.options.minChars = parseInt(this.options.minChars, 10);
+    if (isNaN(this.options.minChars) || this.options.minChars < 1) {
+        this.options.minChars = 2;
+    }
+
+    this.options.maxItemsToShow = parseInt(this.options.maxItemsToShow, 10);
+    if (isNaN(this.options.maxItemsToShow) || this.options.maxItemsToShow < 1) {
+        this.options.maxItemsToShow = 10;
+    }
+
+    this.options.maxCacheLength = parseInt(this.options.maxCacheLength, 10);
+    if (isNaN(this.options.maxCacheLength) || this.options.maxCacheLength < 1) {
+        this.options.maxCacheLength = 10;
+    }
+
+    if (this.options.preloadData === true) {
+        this.fetchRemoteData('', function () {});
+    }
+};
+inherits(AutoCompleter, WrappedElement);
+
+AutoCompleter.prototype.decorate = function (element) {
+
+    /**
+     * Init DOM elements repository
+     */
+    this._element = element;
+
+    /**
+     * Switch off the native autocomplete
+     */
+    this._element.attr('autocomplete', 'off');
+
+    /**
+     * Set prompt text
+     */
+    if ($.trim(element.val()) === '') {
+        this.setPrompt();
+    }
+
+    /**
+     * Create DOM element to hold results
+     */
+    this._results = $('<div></div>').hide();
+    if (this.options.resultsClass) {
+        this._results.addClass(this.options.resultsClass);
+    }
+    this._results.css({
+        position: 'absolute'
+    });
+    $('body').append(this._results);
+
+    this.setEventHandlers();
+};
+
+AutoCompleter.prototype.setPrompt = function () {
+    this._element.val(this.options.promptText);
+    this._element.addClass('prompt');
+};
+
+AutoCompleter.prototype.removePrompt = function () {
+    if (this._element.hasClass('prompt')) {
+        this._element.removeClass('prompt');
+        var val = this._element.val();
+        if (val === this.options.promptText) {
+            this._element.val('');
+        }
+    }
+};
+
+AutoCompleter.prototype.setEventHandlers = function () {
+    /**
+     * Shortcut to self
+     */
+    var self = this;
+
+    /**
+     * Attach keyboard monitoring to $elem
+     */
+    self._element.keydown(function (e) {
+
+        self.removePrompt();
+
+        self.lastKeyPressed_ = e.keyCode;
+        switch (self.lastKeyPressed_) {
+
+            case 38: // up
+                e.preventDefault();
+                if (self.active_) {
+                    self.focusPrev();
+                } else {
+                    self.activate();
+                }
+                return false;
+
+            case 40: // down
+                e.preventDefault();
+                if (self.active_) {
+                    self.focusNext();
+                } else {
+                    self.activate();
+                }
+                return false;
+
+            case 9: // tab
+            case 13: // return
+                if (self.active_) {
+                    e.preventDefault();
+                    self.selectCurrent();
+                    return false;
+                }
+                break;
+
+            case 27: // escape
+                if ($.trim(self._element.val()) === '') {
+                    self.setPrompt();
+                    return false;
+                }
+                if (self.active_) {
+                    e.preventDefault();
+                    self.finish();
+                    return false;
+                }
+                break;
+
+            case 8: //backspace
+                if ($.trim(self._element.val()).length === 1) {
+                    self.setValue('');
+                    self.finish();
+                    return false;
+                } else {
+                    self.activate();
+                }
+            default:
+                self.activate();
+
+        }
+    });
+    self._element.blur(function () {
+        if (self.finishOnBlur_) {
+            setTimeout(function () { self.finish(); }, 200);
+        }
+    });
+};
+
+AutoCompleter.prototype.position = function () {
+    var offset = this._element.offset();
+    this._results.css({
+        top: offset.top + this._element.outerHeight(),
+        left: offset.left
+    });
+};
+
+AutoCompleter.prototype.cacheRead = function (filter) {
+    var filterLength, searchLength, search, maxPos, pos;
+    if (this.options.useCache) {
+        filter = String(filter);
+        filterLength = filter.length;
+        if (this.options.matchSubset) {
+            searchLength = 1;
+        } else {
+            searchLength = filterLength;
+        }
+        while (searchLength <= filterLength) {
+            if (this.options.matchInside) {
+                maxPos = filterLength - searchLength;
+            } else {
+                maxPos = 0;
+            }
+            pos = 0;
+            while (pos <= maxPos) {
+                search = filter.substr(0, searchLength);
+                if (this.cacheData_[search] !== undefined) {
+                    return this.cacheData_[search];
+                }
+                pos++;
+            }
+            searchLength++;
+        }
+    }
+    return false;
+};
+
+AutoCompleter.prototype.cacheWrite = function (filter, data) {
+    if (this.options.useCache) {
+        if (this.cacheLength_ >= this.options.maxCacheLength) {
+            this.cacheFlush();
+        }
+        filter = String(filter);
+        if (this.cacheData_[filter] !== undefined) {
+            this.cacheLength_++;
+        }
+        this.cacheData_[filter] = data;
+        return this.cacheData_[filter];
+    }
+    return false;
+};
+
+AutoCompleter.prototype.cacheFlush = function () {
+    this.cacheData_ = {};
+    this.cacheLength_ = 0;
+};
+
+AutoCompleter.prototype.callHook = function (hook, data) {
+    var f = this.options[hook];
+    if (f && $.isFunction(f)) {
+        return f(data, this);
+    }
+    return false;
+};
+
+AutoCompleter.prototype.activate = function () {
+    var self = this;
+    var activateNow = function () {
+        self.activateNow();
+    };
+    var delay = parseInt(this.options.delay, 10);
+    if (isNaN(delay) || delay <= 0) {
+        delay = 250;
+    }
+    if (this.keyTimeout_) {
+        clearTimeout(this.keyTimeout_);
+    }
+    this.keyTimeout_ = setTimeout(activateNow, delay);
+};
+
+AutoCompleter.prototype.activateNow = function () {
+    var value = this.getValue();
+    if (value !== this.lastProcessedValue_ && value !== this.lastSelectedValue_) {
+        if (value.length >= this.options.minChars) {
+            this.active_ = true;
+            this.lastProcessedValue_ = value;
+            this.fetchData(value);
+        }
+    }
+};
+
+AutoCompleter.prototype.fetchData = function (value) {
+    var self = this;
+    this.fetchRemoteData(value, function (remoteData) {
+        self.filterAndShowResults(remoteData, value);
+    });
+};
+
+AutoCompleter.prototype.fetchRemoteData = function (filter, callback) {
+    var data = this.cacheRead(filter);
+    if (data) {
+        callback(data);
+    } else {
+        var self = this;
+        if (this._element) {
+            this._element.addClass(this.options.loadingClass);
+        }
+        var ajaxCallback = function (data) {
+            var parsed = false;
+            if (data !== false) {
+                parsed = self.parseRemoteData(data);
+                // only cache when cache is enabled
+                if (self.options.useCache) {
+                    self.options.data = parsed;//cache data forever - E.F.
+                }
+                self.cacheWrite(filter, parsed);
+            }
+            if (self._element) {
+                self._element.removeClass(self.options.loadingClass);
+            }
+            callback(parsed);
+        };
+        $.ajax({
+            url: this.makeUrl(filter),
+            success: ajaxCallback,
+            error: function () {
+                ajaxCallback(false);
+            }
+        });
+    }
+};
+
+AutoCompleter.prototype.setOption = function (name, value) {
+    this.options[name] = value;
+};
+
+AutoCompleter.prototype.setExtraParam = function (name, value) {
+    var index = $.trim(String(name));
+    if (index) {
+        if (!this.options.extraParams) {
+            this.options.extraParams = {};
+        }
+        if (this.options.extraParams[index] !== value) {
+            this.options.extraParams[index] = value;
+            this.cacheFlush();
+        }
+    }
+};
+
+AutoCompleter.prototype.makeUrl = function (param) {
+    var self = this;
+    var url = this.options.url;
+    var params = $.extend({}, this.options.extraParams);
+    // If options.queryParamName === false, append query to url
+    // instead of using a GET parameter
+    if (this.options.queryParamName === false) {
+        url += encodeURIComponent(param);
+    } else {
+        params[this.options.queryParamName] = param;
+    }
+
+    if (this.options.limitParamName && this.options.maxItemsToShow) {
+        params[this.options.limitParamName] = this.options.maxItemsToShow;
+    }
+
+    var urlAppend = [];
+    $.each(params, function (index, value) {
+        urlAppend.push(self.makeUrlParam(index, value));
+    });
+    if (urlAppend.length) {
+        url += url.indexOf('?') === -1 ? '?' : '&';
+        url += urlAppend.join('&');
+    }
+    return url;
+};
+
+AutoCompleter.prototype.makeUrlParam = function (name, value) {
+    return String(name) + '=' + encodeURIComponent(value);
+};
+
+/**
+ * Sanitize CR and LF, then split into lines
+ */
+AutoCompleter.prototype.splitText = function (text) {
+    return String(text).replace(/(\r\n|\r|\n)/g, '\n').split(this.options.lineSeparator);
+};
+
+AutoCompleter.prototype.parseRemoteData = function (remoteData) {
+    var value, i, j, data;
+    var results = [];
+    var lines = this.splitText(remoteData);
+    for (i = 0; i < lines.length; i++) {
+        var line = lines[i].split(this.options.cellSeparator);
+        data = [];
+        for (j = 0; j < line.length; j++) {
+            data.push(unescape(line[j]));
+        }
+        value = data.shift();
+        results.push({ value: unescape(value), data: data });
+    }
+    return results;
+};
+
+AutoCompleter.prototype.filterAndShowResults = function (results, filter) {
+    this.showResults(this.filterResults(results, filter), filter);
+};
+
+AutoCompleter.prototype.filterResults = function (results, filter) {
+
+    var filtered = [];
+    var value, data, i, result, type, include;
+    var regex, pattern, testValue;
+
+    for (i = 0; i < results.length; i++) {
+        result = results[i];
+        type = typeof result;
+        if (type === 'string') {
+            value = result;
+            data = {};
+        } else if ($.isArray(result)) {
+            value = result[0];
+            data = result.slice(1);
+        } else if (type === 'object') {
+            value = result.value;
+            data = result.data;
+        }
+        value = String(value);
+        if (value > '') {
+            if (typeof data !== 'object') {
+                data = {};
+            }
+            if (this.options.filterResults) {
+                pattern = String(filter);
+                testValue = String(value);
+                if (!this.options.matchCase) {
+                    pattern = pattern.toLowerCase();
+                    testValue = testValue.toLowerCase();
+                }
+                include = testValue.indexOf(pattern);
+                if (this.options.matchInside) {
+                    include = include > -1;
+                } else {
+                    include = include === 0;
+                }
+            } else {
+                include = true;
+            }
+            if (include) {
+                filtered.push({ value: value, data: data });
+            }
+        }
+    }
+
+    if (this.options.sortResults) {
+        filtered = this.sortResults(filtered, filter);
+    }
+
+    if (this.options.maxItemsToShow > 0 && this.options.maxItemsToShow < filtered.length) {
+        filtered.length = this.options.maxItemsToShow;
+    }
+
+    return filtered;
+
+};
+
+AutoCompleter.prototype.sortResults = function (results, filter) {
+    var self = this;
+    var sortFunction = this.options.sortFunction;
+    if (!$.isFunction(sortFunction)) {
+        sortFunction = function (a, b, f) {
+            return self.sortValueAlpha(a, b, f);
+        };
+    }
+    results.sort(function (a, b) {
+        return sortFunction(a, b, filter);
+    });
+    return results;
+};
+
+AutoCompleter.prototype.sortValueAlpha = function (a, b, filter) {
+    a = String(a.value);
+    b = String(b.value);
+    if (!this.options.matchCase) {
+        a = a.toLowerCase();
+        b = b.toLowerCase();
+    }
+    if (a > b) {
+        return 1;
+    }
+    if (a < b) {
+        return -1;
+    }
+    return 0;
+};
+
+AutoCompleter.prototype.showResults = function (results, filter) {
+    var self = this;
+    var $ul = $('<ul></ul>');
+    var i, result, $li, extraWidth, first = false, $first = false;
+    var numResults = results.length;
+    for (i = 0; i < numResults; i++) {
+        result = results[i];
+        $li = $('<li>' + this.showResult(result.value, result.data) + '</li>');
+        $li.data('value', result.value);
+        $li.data('data', result.data);
+        $ul.append($li);
+        if (first === false) {
+            first = String(result.value);
+            $first = $li;
+            $li.addClass(this.options.firstItemClass);
+        }
+        if (i === numResults - 1) {
+            $li.addClass(this.options.lastItemClass);
+        }
+    }
+
+    $ul.children('li').click(function () {
+        var $this = $(this);
+        self.selectItem($this);
+    }).mousedown(function () {
+        self.finishOnBlur_ = false;
+    }).mouseup(function () {
+        self.finishOnBlur_ = true;
+    });
+
+    // Alway recalculate position before showing since window size or
+    // input element location may have changed. This fixes #14
+    this.position();
+
+    this._results.html($ul).show();
+    extraWidth = this._results.outerWidth() - this._results.width();
+    this._results.width(this._element.outerWidth() - extraWidth);
+    $('li', this._results).hover(
+        function () { self.focusItem(this); },
+        function () { /* void */ }
+    );
+    if (this.autoFill(first, filter)) {
+        this.focusItem($first);
+    }
+};
+
+AutoCompleter.prototype.showResult = function (value, data) {
+    if ($.isFunction(this.options.showResult)) {
+        return this.options.showResult(value, data);
+    } else {
+        return value;
+    }
+};
+
+AutoCompleter.prototype.autoFill = function (value, filter) {
+    var lcValue, lcFilter, valueLength, filterLength;
+    if (this.options.autoFill && this.lastKeyPressed_ !== 8) {
+        lcValue = String(value).toLowerCase();
+        lcFilter = String(filter).toLowerCase();
+        valueLength = value.length;
+        filterLength = filter.length;
+        if (lcValue.substr(0, filterLength) === lcFilter) {
+            this._element.val(value);
+            this.selectRange(filterLength, valueLength);
+            return true;
+        }
+    }
+    return false;
+};
+
+AutoCompleter.prototype.focusNext = function () {
+    this.focusMove(+1);
+};
+
+AutoCompleter.prototype.focusPrev = function () {
+    this.focusMove(-1);
+};
+
+AutoCompleter.prototype.focusMove = function (modifier) {
+    var $items = $('li', this._results);
+    modifier = parseInt(modifier, 10);
+    for (var i = 0; i < $items.length; i++) {
+        if ($($items[i]).hasClass(this.selectClass_)) {
+            this.focusItem(i + modifier);
+            return;
+        }
+    }
+    this.focusItem(0);
+};
+
+AutoCompleter.prototype.focusItem = function (item) {
+    var $item, $items = $('li', this._results);
+    if ($items.length) {
+        $items.removeClass(this.selectClass_).removeClass(this.options.selectClass);
+        if (typeof item === 'number') {
+            item = parseInt(item, 10);
+            if (item < 0) {
+                item = 0;
+            } else if (item >= $items.length) {
+                item = $items.length - 1;
+            }
+            $item = $($items[item]);
+        } else {
+            $item = $(item);
+        }
+        if ($item) {
+            $item.addClass(this.selectClass_).addClass(this.options.selectClass);
+        }
+    }
+};
+
+AutoCompleter.prototype.selectCurrent = function () {
+    var $item = $('li.' + this.selectClass_, this._results);
+    if ($item.length === 1) {
+        this.selectItem($item);
+    } else {
+        this.finish();
+    }
+};
+
+AutoCompleter.prototype.selectItem = function ($li) {
+    var value = $li.data('value');
+    var data = $li.data('data');
+    var displayValue = this.displayValue(value, data);
+    this.lastProcessedValue_ = displayValue;
+    this.lastSelectedValue_ = displayValue;
+
+    this.setValue(displayValue);
+
+    this.setCaret(this._element.val().length);
+    this.callHook('onItemSelect', { value: value, data: data });
+    this.finish();
+};
+
+/**
+ * @return {boolean} true if the symbol matches something that is
+ *                   considered content and false otherwise
+ * @param {string} symbol - a single char string
+ */
+AutoCompleter.prototype.isContentChar = function (symbol) {
+    if (symbol.match(this.options.stopCharRegex)) {
+        return false;
+    } else if (symbol === this.options.multipleSeparator) {
+        return false;
+    } else {
+        return true;
+    }
+};
+
+/**
+ * takes value from the input box
+ * and saves _selection_start and _selection_end coordinates
+ * respects settings autocompleteMultiple and
+ * multipleSeparator
+ * @return {string} the current word in the
+ * autocompletable word
+ */
+AutoCompleter.prototype.getValue = function () {
+    var sel = this._element.getSelection();
+    var text = this._element.val();
+    var pos = sel.start;//estimated start
+    //find real start
+    var start = pos;
+    for (cpos = pos; cpos >= 0; cpos = cpos - 1) {
+        if (cpos === text.length) {
+            continue;
+        }
+        var symbol_start = text.charAt(cpos);
+        if (!this.isContentChar(symbol_start)) {
+            break;
+        }
+        start = cpos;
+    }
+    //find real end
+    var end = pos;
+    for (cpos = pos; cpos < text.length; cpos = cpos + 1) {
+        if (cpos === 0) {
+            continue;
+        }
+        var symbol_end = text.charAt(cpos);
+        if (!this.isContentChar(symbol_end)) {
+            break;
+        }
+        end = cpos;
+    }
+    this._selection_start = start;
+    this._selection_end = end;
+    return text.substring(start, end);
+};
+
+/**
+ * sets value of the input box
+ * by replacing the previous selection
+ * with the value from the autocompleter
+ */
+AutoCompleter.prototype.setValue = function (val) {
+    var prefix = this._element.val().substring(0, this._selection_start);
+    var postfix = this._element.val().substring(this._selection_end + 1);
+    this._element.val(prefix + val + postfix);
+};
+
+AutoCompleter.prototype.displayValue = function (value, data) {
+    if ($.isFunction(this.options.displayValue)) {
+        return this.options.displayValue(value, data);
+    } else {
+        return value;
+    }
+};
+
+AutoCompleter.prototype.finish = function () {
+    if (this.keyTimeout_) {
+        clearTimeout(this.keyTimeout_);
+    }
+    if (this._element.val() !== this.lastSelectedValue_) {
+        if (this.options.mustMatch) {
+            this._element.val('');
+        }
+        this.callHook('onNoMatch');
+    }
+    this._results.hide();
+    this.lastKeyPressed_ = null;
+    this.lastProcessedValue_ = null;
+    if (this.active_) {
+        this.callHook('onFinish');
+    }
+    this.active_ = false;
+};
+
+AutoCompleter.prototype.selectRange = function (start, end) {
+    var input = this._element.get(0);
+    if (input.setSelectionRange) {
+        input.focus();
+        input.setSelectionRange(start, end);
+    } else if (this.createTextRange) {
+        var range = this.createTextRange();
+        range.collapse(true);
+        range.moveEnd('character', end);
+        range.moveStart('character', start);
+        range.select();
+    }
+};
+
+AutoCompleter.prototype.setCaret = function (pos) {
+    this.selectRange(pos, pos);
+};
+
+©]J¥k      [*&ñ[*&ñ?28ô[*'=   E    :https://faq.i3wm.org/m/default/media/js/utils/autocompleter.js%3Fv=2 strongly-framed 1 security-info FnhllAKWRHGAlo+ESXykKAAAAAAAAAAAwAAAAAAAAEaphjojH6pBabDSgSnsfLHeAAQAAgAAAAAAAAAAAAAAAAAAAAAB4vFIJp5wRkeyPxAQ9RJGKPqbqVvKO0mKuIl8ec8o/uhmCjImkVxP+7sgiYWmMt8FvcOXmlQiTNWFiWlrbpbqgwAAAAAAAAoyMIIKLjCCCdSgAwIBAgIQPXLliLm882kZCaE1O2AJQTAKBggqhkjOPQQDAjCBkjELMAkGA1UEBhMCR0IxGzAZBgNVBAgTEkdyZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBxMHU2FsZm9yZDEaMBgGA1UEChMRQ09NT0RPIENBIExpbWl0ZWQxODA2BgNVBAMTL0NPTU9ETyBFQ0MgRG9tYWluIFZhbGlkYXRpb24gU2VjdXJlIFNlcnZlciBDQSAyMB4XDTE4MDYxODAwMDAwMFoXDTE4MTIyNTIzNTk1OVowazEhMB8GA1UECxMYRG9tYWluIENvbnRyb2wgVmFsaWRhdGVkMSEwHwYDVQQLExhQb3NpdGl2ZVNTTCBNdWx0aS1Eb21haW4xIzAhBgNVBAMTGnNuaTM3NTM5LmNsb3VkZmxhcmVzc2wuY29tMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE85/PEWijoj1UwV8dc2plaLU2Q94jh5XJyL7n86thOXVHJrf6I7Lin0f1gxqfxQTXlvIQ8UjAyx8CTcAC4LC3RqOCCDAwgggsMB8GA1UdIwQYMBaAFEAJYWfwvINxT94SCCxv1NQrdj2WMB0GA1UdDgQWBBQMSCk8MNsWyag4Jn6C3/a29fX7/TAOBgNVHQ8BAf8EBAMCB4AwDAYDVR0TAQH/BAIwADAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwTwYDVR0gBEgwRjA6BgsrBgEEAbIxAQICBzArMCkGCCsGAQUFBwIBFh1odHRwczovL3NlY3VyZS5jb21vZG8uY29tL0NQUzAIBgZngQwBAgEwVgYDVR0fBE8wTTBLoEmgR4ZFaHR0cDovL2NybC5jb21vZG9jYTQuY29tL0NPTU9ET0VDQ0RvbWFpblZhbGlkYXRpb25TZWN1cmVTZXJ2ZXJDQTIuY3JsMIGIBggrBgEFBQcBAQR8MHowUQYIKwYBBQUHMAKGRWh0dHA6Ly9jcnQuY29tb2RvY2E0LmNvbS9DT01PRE9FQ0NEb21haW5WYWxpZGF0aW9uU2VjdXJlU2VydmVyQ0EyLmNydDAlBggrBgEFBQcwAYYZaHR0cDovL29jc3AuY29tb2RvY2E0LmNvbTCCBW8GA1UdEQSCBWYwggVighpzbmkzNzUzOS5jbG91ZGZsYXJlc3NsLmNvbYISKi4xcGF0dGVybmhvbWUwLmdhgg8qLjU5ZGVza3RvcDIuZ3GCDyouNmRlc2lnbmhkMS5jZoISKi5hbGVydG9waW5pb24uY29tgiAqLmJjYXJkLXNlY3VyZS1sZGVudHZlcmZhaHJlbi5ydYINKi5ib2JvbHRzLmNvbYIUKi5jaGVhcHNhbmRpc2trcWQuZ2GCGSouY29tZXRvZ2V0aGVyYm93bmVzcy5jb22CFSouZGVza3RvcHdhbGw4d2FsbC5nYYIMKi5maHZpcHMuY29tgg4qLmZvanRva2xvay50a4IPKi5mcmVnYXQtc3BiLnJ1ggwqLmZyaXNvbnMuZnKCCiouZ292bm8ubWyCCiouaHJ5MjQuc2uCCiouaTN3bS5vcmeCDiouamN2YWVib29rLm1sgg4qLmtvdm50aWtpcy5jZoIUKi5sZXF1YXJ0aWVybGF0aW4uZnKCHCoubWFtbXV0bW91bnRhaW5zY2hvb2wuY28udWuCDioubW9iaWxlMzE1LmNmghEqLm1vdmllc2hlbHBlci5tbIIQKi5wYXR0ZXJuaGQ1Ni5nYYIbKi5wY2tleW5vdGlmaWNhdGlvbnMucmV2aWV3ggwqLnJpY2Zvc3MuZ3GCDyoucm9idXN0aXJjLm5ldIIXKi5zZWxmYnVpbGRuZXdob21lcy5jb22CEyouc3BtaW5zdHJ1bWVmbnQuZ3GCDSouc3V0YXplMjQuc2uCECoudG9tYm9ib2x0cy5jb22CDioudHJlbmRpZnkuY29tghIqLndhbHkta3Jhd2N6eWsucGyCECoud2hlaGVsYmFzZXMuZ2GCGyoud2luZG93c25vdy5hbHRlcnZpc3RhLm9yZ4IMKi54MTF2aXMub3JnghAqLnh4eHZvdGUucmV2aWV3gg4qLnphYmF2dm5lcy50a4IMKi56ZWtqdXIubmV0ghAxcGF0dGVybmhvbWUwLmdhgg01OWRlc2t0b3AyLmdxgg02ZGVzaWduaGQxLmNmghBhbGVydG9waW5pb24uY29tgh5iY2FyZC1zZWN1cmUtbGRlbnR2ZXJmYWhyZW4ucnWCC2JvYm9sdHMuY29tghJjaGVhcHNhbmRpc2trcWQuZ2GCF2NvbWV0b2dldGhlcmJvd25lc3MuY29tghNkZXNrdG9wd2FsbDh3YWxsLmdhggpmaHZpcHMuY29tggxmb2p0b2tsb2sudGuCDWZyZWdhdC1zcGIucnWCCmZyaXNvbnMuZnKCCGdvdm5vLm1sgghocnkyNC5za4IIaTN3bS5vcmeCDGpjdmFlYm9vay5tbIIMa292bnRpa2lzLmNmghJsZXF1YXJ0aWVybGF0aW4uZnKCGm1hbW11dG1vdW50YWluc2Nob29sLmNvLnVrggxtb2JpbGUzMTUuY2aCD21vdmllc2hlbHBlci5tbIIOcGF0dGVybmhkNTYuZ2GCGXBja2V5bm90aWZpY2F0aW9ucy5yZXZpZXeCCnJpY2Zvc3MuZ3GCDXJvYnVzdGlyYy5uZXSCFXNlbGZidWlsZG5ld2hvbWVzLmNvbYIRc3BtaW5zdHJ1bWVmbnQuZ3GCC3N1dGF6ZTI0LnNrgg50b21ib2JvbHRzLmNvbYIMdHJlbmRpZnkuY29tghB3YWx5LWtyYXdjenlrLnBsgg53aGVoZWxiYXNlcy5nYYIZd2luZG93c25vdy5hbHRlcnZpc3RhLm9yZ4IKeDExdmlzLm9yZ4IOeHh4dm90ZS5yZXZpZXeCDHphYmF2dm5lcy50a4IKemVranVyLm5ldDCCAQQGCisGAQQB1nkCBAIEgfUEgfIA8AB2AO5Lvbd1zmC64UJpH6vhnmajD35fsHLYgwDEe4l6qP3LAAABZBCprdMAAAQDAEcwRQIgIgozFgA49lPG0PTy86Gd/wuc3BOrr4+AFhLaI1INoscCIQCSdmTrrQGI2hjPPDxQeumP9FMB3vXdcMygJ7oZs8bEmQB2ANt0r+7LKeyx/so+cW0s5bmquzb3hHGDx12dTze2H79kAAABZBCprhEAAAQDAEcwRQIgRwAp0+HPf1ToWJOs12X8gDriAWDJgrWG+nDh8oBloxICIQC93XqUG41zYtM8a78fbxa8OImGK84WgyY3Xe+J89zA/TAKBggqhkjOPQQDAgNIADBFAiEAq+a7c5+0UydAQ3cOE8CWxz6yaKiF5AUBV5yKQY11SHoCIFq2GIYE+SKsAf129MqI3f5ipQLnUuqgN/VnAHydFnUiEwEDBAAAAAABAQAAAAAAAAZ4MjU1MTkAAAARRUNEU0EtUDI1Ni1TSEEyNTYBlZ+xZWUXSH+rm9iRO+Uxl650zaXNL0c/lvXwt//2LGgAAAADZgoyJpFcT/u7IImFpjLfBb3Dl5pUIkzVhYlpa26W6oMAAAAAAAAKMjCCCi4wggnUoAMCAQICED1y5Yi5vPNpGQmhNTtgCUEwCgYIKoZIzj0EAwIwgZIxCzAJBgNVBAYTAkdCMRswGQYDVQQIExJHcmVhdGVyIE1hbmNoZXN0ZXIxEDAOBgNVBAcTB1NhbGZvcmQxGjAYBgNVBAoTEUNPTU9ETyBDQSBMaW1pdGVkMTgwNgYDVQQDEy9DT01PRE8gRUNDIERvbWFpbiBWYWxpZGF0aW9uIFNlY3VyZSBTZXJ2ZXIgQ0EgMjAeFw0xODA2MTgwMDAwMDBaFw0xODEyMjUyMzU5NTlaMGsxITAfBgNVBAsTGERvbWFpbiBDb250cm9sIFZhbGlkYXRlZDEhMB8GA1UECxMYUG9zaXRpdmVTU0wgTXVsdGktRG9tYWluMSMwIQYDVQQDExpzbmkzNzUzOS5jbG91ZGZsYXJlc3NsLmNvbTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABPOfzxFoo6I9VMFfHXNqZWi1NkPeI4eVyci+5/OrYTl1Rya3+iOy4p9H9YMan8UE15byEPFIwMsfAk3AAuCwt0ajgggwMIIILDAfBgNVHSMEGDAWgBRACWFn8LyDcU/eEggsb9TUK3Y9ljAdBgNVHQ4EFgQUDEgpPDDbFsmoOCZ+gt/2tvX1+/0wDgYDVR0PAQH/BAQDAgeAMAwGA1UdEwEB/wQCMAAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCME8GA1UdIARIMEYwOgYLKwYBBAGyMQECAgcwKzApBggrBgEFBQcCARYdaHR0cHM6Ly9zZWN1cmUuY29tb2RvLmNvbS9DUFMwCAYGZ4EMAQIBMFYGA1UdHwRPME0wS6BJoEeGRWh0dHA6Ly9jcmwuY29tb2RvY2E0LmNvbS9DT01PRE9FQ0NEb21haW5WYWxpZGF0aW9uU2VjdXJlU2VydmVyQ0EyLmNybDCBiAYIKwYBBQUHAQEEfDB6MFEGCCsGAQUFBzAChkVodHRwOi8vY3J0LmNvbW9kb2NhNC5jb20vQ09NT0RPRUNDRG9tYWluVmFsaWRhdGlvblNlY3VyZVNlcnZlckNBMi5jcnQwJQYIKwYBBQUHMAGGGWh0dHA6Ly9vY3NwLmNvbW9kb2NhNC5jb20wggVvBgNVHREEggVmMIIFYoIac25pMzc1MzkuY2xvdWRmbGFyZXNzbC5jb22CEiouMXBhdHRlcm5ob21lMC5nYYIPKi41OWRlc2t0b3AyLmdxgg8qLjZkZXNpZ25oZDEuY2aCEiouYWxlcnRvcGluaW9uLmNvbYIgKi5iY2FyZC1zZWN1cmUtbGRlbnR2ZXJmYWhyZW4ucnWCDSouYm9ib2x0cy5jb22CFCouY2hlYXBzYW5kaXNra3FkLmdhghkqLmNvbWV0b2dldGhlcmJvd25lc3MuY29tghUqLmRlc2t0b3B3YWxsOHdhbGwuZ2GCDCouZmh2aXBzLmNvbYIOKi5mb2p0b2tsb2sudGuCDyouZnJlZ2F0LXNwYi5ydYIMKi5mcmlzb25zLmZyggoqLmdvdm5vLm1sggoqLmhyeTI0LnNrggoqLmkzd20ub3Jngg4qLmpjdmFlYm9vay5tbIIOKi5rb3ZudGlraXMuY2aCFCoubGVxdWFydGllcmxhdGluLmZyghwqLm1hbW11dG1vdW50YWluc2Nob29sLmNvLnVrgg4qLm1vYmlsZTMxNS5jZoIRKi5tb3ZpZXNoZWxwZXIubWyCECoucGF0dGVybmhkNTYuZ2GCGyoucGNrZXlub3RpZmljYXRpb25zLnJldmlld4IMKi5yaWNmb3NzLmdxgg8qLnJvYnVzdGlyYy5uZXSCFyouc2VsZmJ1aWxkbmV3aG9tZXMuY29tghMqLnNwbWluc3RydW1lZm50Lmdxgg0qLnN1dGF6ZTI0LnNrghAqLnRvbWJvYm9sdHMuY29tgg4qLnRyZW5kaWZ5LmNvbYISKi53YWx5LWtyYXdjenlrLnBsghAqLndoZWhlbGJhc2VzLmdhghsqLndpbmRvd3Nub3cuYWx0ZXJ2aXN0YS5vcmeCDCoueDExdmlzLm9yZ4IQKi54eHh2b3RlLnJldmlld4IOKi56YWJhdnZuZXMudGuCDCouemVranVyLm5ldIIQMXBhdHRlcm5ob21lMC5nYYINNTlkZXNrdG9wMi5ncYINNmRlc2lnbmhkMS5jZoIQYWxlcnRvcGluaW9uLmNvbYIeYmNhcmQtc2VjdXJlLWxkZW50dmVyZmFocmVuLnJ1ggtib2JvbHRzLmNvbYISY2hlYXBzYW5kaXNra3FkLmdhghdjb21ldG9nZXRoZXJib3duZXNzLmNvbYITZGVza3RvcHdhbGw4d2FsbC5nYYIKZmh2aXBzLmNvbYIMZm9qdG9rbG9rLnRrgg1mcmVnYXQtc3BiLnJ1ggpmcmlzb25zLmZygghnb3Zuby5tbIIIaHJ5MjQuc2uCCGkzd20ub3JnggxqY3ZhZWJvb2subWyCDGtvdm50aWtpcy5jZoISbGVxdWFydGllcmxhdGluLmZyghptYW1tdXRtb3VudGFpbnNjaG9vbC5jby51a4IMbW9iaWxlMzE1LmNmgg9tb3ZpZXNoZWxwZXIubWyCDnBhdHRlcm5oZDU2LmdhghlwY2tleW5vdGlmaWNhdGlvbnMucmV2aWV3ggpyaWNmb3NzLmdxgg1yb2J1c3RpcmMubmV0ghVzZWxmYnVpbGRuZXdob21lcy5jb22CEXNwbWluc3RydW1lZm50LmdxggtzdXRhemUyNC5za4IOdG9tYm9ib2x0cy5jb22CDHRyZW5kaWZ5LmNvbYIQd2FseS1rcmF3Y3p5ay5wbIIOd2hlaGVsYmFzZXMuZ2GCGXdpbmRvd3Nub3cuYWx0ZXJ2aXN0YS5vcmeCCngxMXZpcy5vcmeCDnh4eHZvdGUucmV2aWV3ggx6YWJhdnZuZXMudGuCCnpla2p1ci5uZXQwggEEBgorBgEEAdZ5AgQCBIH1BIHyAPAAdgDuS723dc5guuFCaR+r4Z5mow9+X7By2IMAxHuJeqj9ywAAAWQQqa3TAAAEAwBHMEUCICIKMxYAOPZTxtD08vOhnf8LnNwTq6+PgBYS2iNSDaLHAiEAknZk660BiNoYzzw8UHrpj/RTAd713XDMoCe6GbPGxJkAdgDbdK/uyynssf7KPnFtLOW5qrs294Rxg8ddnU83th+/ZAAAAWQQqa4RAAAEAwBHMEUCIEcAKdPhz39U6FiTrNdl/IA64gFgyYK1hvpw4fKAZaMSAiEAvd16lBuNc2LTPGu/H28WvDiJhivOFoMmN13vifPcwP0wCgYI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 request-method GET request-Accept-Encoding gzip, deflate, br response-head HTTP/2.0 200 OK
+content-type: application/octet-stream
+content-length: 22211
+last-modified: Mon, 21 Dec 2015 08:00:44 GMT
+access-control-allow-origin: *
+x-github-request-id: 43B6:7FE5:6C8E243:90335C9:5B2957EF
+accept-ranges: bytes
+date: Wed, 20 Jun 2018 10:05:05 GMT
+via: 1.1 varnish
+cache-control: max-age=600
+expires: Tue, 19 Jun 2018 19:32:04 GMT
+age: 493
+x-served-by: cache-bma1645-BMA
+x-cache: HIT
+x-cache-hits: 1
+x-timer: S1529489105.221963,VS0,VE1
+vary: Accept-Encoding
+x-fastly-request-id: 21c4801bab8aff574e0825d19d72df25c7d8c9f5
+expect-ct: max-age=604800, report-uri="https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct"
+server: cloudflare
+cf-ray: 42dd6a3b9c423cd1-CPH
+X-Firefox-Spdy: h2
+ original-response-headers date: Wed, 20 Jun 2018 10:05:03 GMT
+content-type: application/octet-stream
+content-length: 22211
+last-modified: Mon, 21 Dec 2015 08:00:44 GMT
+access-control-allow-origin: *
+expires: Tue, 19 Jun 2018 19:32:04 GMT
+cache-control: max-age=600
+x-github-request-id: 43B6:7FE5:6C8E243:90335C9:5B2957EF
+accept-ranges: bytes
+via: 1.1 varnish
+age: 491
+x-served-by: cache-bma1626-BMA
+x-cache: HIT
+x-cache-hits: 1
+x-timer: S1529489104.918550,VS0,VE0
+vary: Accept-Encoding
+x-fastly-request-id: 49dc9e4ae5ef5676b722866fbbd616622d1c9b61
+expect-ct: max-age=604800, report-uri="https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct"
+server: cloudflare
+cf-ray: 42dd6a336f273cd1-CPH
+X-Firefox-Spdy: h2
+ necko:classified 1   VÃ

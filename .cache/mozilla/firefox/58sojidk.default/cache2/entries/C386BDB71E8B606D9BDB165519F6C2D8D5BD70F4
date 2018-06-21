@@ -1,0 +1,124 @@
+/*
+	jQuery TextAreaResizer plugin
+	Created on 17th January 2008 by Ryan O'Dell
+	Version 1.0.4
+*/(function($){var textarea,staticOffset;var iLastMousePos=0;var iMin=32;var grip;$.fn.TextAreaResizer=function(){return this.each(function(){textarea=$(this).addClass('processed'),staticOffset=null;$(this).wrap('<div class="resizable-textarea"><span></span></div>').parent().append($('<div class="grippie"></div>').bind("mousedown",{el:this},startDrag));var grippie=$('div.grippie',$(this).parent())[0];grippie.style.marginRight=(grippie.offsetWidth-$(this)[0].offsetWidth)+'px'})};function startDrag(e){textarea=$(e.data.el);textarea.blur();iLastMousePos=mousePosition(e).y;staticOffset=textarea.height()-iLastMousePos;textarea.css('opacity',0.25);$(document).mousemove(performDrag).mouseup(endDrag);return false}function performDrag(e){var iThisMousePos=mousePosition(e).y;var iMousePos=staticOffset+iThisMousePos;if(iLastMousePos>=(iThisMousePos)){iMousePos-=5}iLastMousePos=iThisMousePos;iMousePos=Math.max(iMin,iMousePos);textarea.height(iMousePos+'px');if(iMousePos<iMin){endDrag(e)}return false}function endDrag(e){$(document).unbind('mousemove',performDrag).unbind('mouseup',endDrag);textarea.css('opacity',1);textarea.focus();textarea=null;staticOffset=null;iLastMousePos=0}function mousePosition(e){return{x:e.clientX+document.documentElement.scrollLeft,y:e.clientY+document.documentElement.scrollTop}}})(jQuery);
+/*
+ *	TypeWatch 2.0 - Original by Denny Ferrassoli / Refactored by Charles Christolini
+ *  Copyright(c) 2007 Denny Ferrassoli - DennyDotNet.com
+ *  Coprright(c) 2008 Charles Christolini - BinaryPie.com
+ *  Dual licensed under the MIT and GPL licenses:
+ *  http://www.opensource.org/licenses/mit-license.php
+ *  http://www.gnu.org/licenses/gpl.html
+*/(function(jQuery){jQuery.fn.typeWatch=function(o){var options=jQuery.extend({wait:750,callback:function(){},highlight:true,captureLength:2},o);function checkElement(timer,override){var elTxt=jQuery(timer.el).val();if((elTxt.length>options.captureLength&&elTxt.toUpperCase()!=timer.text)||(override&&elTxt.length>options.captureLength)){timer.text=elTxt.toUpperCase();timer.cb(elTxt)}};function watchElement(elem){if(elem.type.toUpperCase()=="TEXT"||elem.nodeName.toUpperCase()=="TEXTAREA"){var timer={timer:null,text:jQuery(elem).val().toUpperCase(),cb:options.callback,el:elem,wait:options.wait};if(options.highlight){jQuery(elem).focus(function(){this.select()})}var startWatch=function(evt){var timerWait=timer.wait;var overrideBool=false;if(evt.keyCode==13&&this.type.toUpperCase()=="TEXT"){timerWait=1;overrideBool=true}var timerCallbackFx=function(){checkElement(timer,overrideBool)};clearTimeout(timer.timer);timer.timer=setTimeout(timerCallbackFx,timerWait)};jQuery(elem).keydown(startWatch)}};return this.each(function(index){watchElement(this)})}})(jQuery);
+/*
+Ajax upload
+*/jQuery.extend({createUploadIframe:function(d,b){var a="jUploadFrame"+d;if(window.ActiveXObject){var c=document.createElement('<iframe id="'+a+'" name="'+a+'" />');if(typeof b=="boolean"){c.src="javascript:false"}else{if(typeof b=="string"){c.src=b}}}else{var c=document.createElement("iframe");c.id=a;c.name=a}c.style.position="absolute";c.style.top="-1000px";c.style.left="-1000px";document.body.appendChild(c);return c},createUploadForm:function(g,b){var e="jUploadForm"+g;var a="jUploadFile"+g;var d=$('<form  action="" method="POST" name="'+e+'" id="'+e+'" enctype="multipart/form-data"></form>');var c=$("#"+b);var f=$(c).clone();$(c).attr("id",a);$(c).before(f);$(c).appendTo(d);$(d).css("position","absolute");$(d).css("top","-1200px");$(d).css("left","-1200px");$(d).appendTo("body");return d},ajaxFileUpload:function(k){k=jQuery.extend({},jQuery.ajaxSettings,k);var a=new Date().getTime();var b=jQuery.createUploadForm(a,k.fileElementId);var i=jQuery.createUploadIframe(a,k.secureuri);var h="jUploadFrame"+a;var j="jUploadForm"+a;if(k.global&&!jQuery.active++){jQuery.event.trigger("ajaxStart")}var c=false;var f={};if(k.global){jQuery.event.trigger("ajaxSend",[f,k])}var d=function(l){var p=document.getElementById(h);try{if(p.contentWindow){f.responseText=p.contentWindow.document.body?p.contentWindow.document.body.innerText:null;f.responseXML=p.contentWindow.document.XMLDocument?p.contentWindow.document.XMLDocument:p.contentWindow.document}else{if(p.contentDocument){f.responseText=p.contentDocument.document.body?p.contentDocument.document.body.textContent||document.body.innerText:null;f.responseXML=p.contentDocument.document.XMLDocument?p.contentDocument.document.XMLDocument:p.contentDocument.document}}}catch(o){jQuery.handleError(k,f,null,o)}if(f||l=="timeout"){c=true;var m;try{m=l!="timeout"?"success":"error";if(m!="error"){var n=jQuery.uploadHttpData(f,k.dataType);if(k.success){k.success(n,m)}if(k.global){jQuery.event.trigger("ajaxSuccess",[f,k])}}else{jQuery.handleError(k,f,m)}}catch(o){m="error";jQuery.handleError(k,f,m,o)}if(k.global){jQuery.event.trigger("ajaxComplete",[f,k])}if(k.global&&!--jQuery.active){jQuery.event.trigger("ajaxStop")}if(k.complete){k.complete(f,m)}jQuery(p).unbind();setTimeout(function(){try{$(p).remove();$(b).remove()}catch(q){jQuery.handleError(k,f,null,q)}},100);f=null}};if(k.timeout>0){setTimeout(function(){if(!c){d("timeout")}},k.timeout)}try{var b=$("#"+j);$(b).attr("action",k.url);$(b).attr("method","POST");$(b).attr("target",h);if(b.encoding){b.encoding="multipart/form-data"}else{b.enctype="multipart/form-data"}$(b).submit()}catch(g){jQuery.handleError(k,f,null,g)}if(window.attachEvent){document.getElementById(h).attachEvent("onload",d)}else{document.getElementById(h).addEventListener("load",d,false)}return{abort:function(){}}},uploadHttpData:function(r,type){var data=!type;data=type=="xml"||data?r.responseXML:r.responseText;if(type=="script"){jQuery.globalEval(data)}if(type=="json"){eval("data = "+data)}if(type=="html"){jQuery("<div>").html(data).evalScripts()}return data}});
+/**
+ * Upload call. Used only once in the wmd file upload
+ * this is used in the wmd file uploader and the
+ * askbots image and attachment upload plugins
+ * @todo refactor this code to "new style"
+ */
+function ajaxFileUpload(options) {
+
+    var spinner = options['spinner'];
+    var uploadInputId = options['uploadInputId'];
+    var urlInput = $(options['urlInput']);
+    var startUploadHandler = options['startUploadHandler'];
+
+    spinner.ajaxStart(function(){
+        $(this).show();
+    }).ajaxComplete(function(){
+        $(this).hide();
+    });
+
+    /* important!!! upload input must be loaded by id
+     * because ajaxFileUpload monkey-patches the upload form */
+    $('#' + uploadInputId).ajaxStart(function(){
+        $(this).hide();
+    }).ajaxComplete(function(){
+        $(this).show();
+    });
+
+    //var localFilePath = upload_input.val();
+    $.ajaxFileUpload({
+        url: askbot['urls']['upload'],
+        secureuri: false,
+        fileElementId: uploadInputId,
+        dataType: 'xml',
+        success: function (data, status) {
+
+            var fileURL = $(data).find('file_url').text();
+            /*
+            * hopefully a fix for the "fakepath" issue
+            * https://www.mediawiki.org/wiki/Special:Code/MediaWiki/83225
+            */
+            fileURL = fileURL.replace(/\w:.*\\(.*)$/,'$1');
+            var error = $(data).find('error').text();
+            if(error != ''){
+                alert(error);
+            } else {
+                urlInput.attr('value', fileURL);
+            }
+
+            /* re-install this as the upload extension
+             * will remove the handler to prevent double uploading
+             * this hack is a manipulation around the
+             * ajaxFileUpload jQuery plugin. */
+            $('#' + uploadInputId).unbind('change').change(startUploadHandler);
+        },
+        error: function (data, status, e) {
+            if (startUploadHandler){
+                /* re-install this as the upload extension
+                * will remove the handler to prevent double uploading */
+                $('#' + uploadInputId).unbind('change').change(startUploadHandler);
+            }
+        }
+    });
+    return false;
+};
+ÕˆêÂN      [*&ñ[*&ñ?28ô[*'=   ;    :https://faq.i3wm.org/m/default/media/jslib/editor.js%3Fv=2 strongly-framed 1 security-info FnhllAKWRHGAlo+ESXykKAAAAAAAAAAAwAAAAAAAAEaphjojH6pBabDSgSnsfLHeAAQAAgAAAAAAAAAAAAAAAAAAAAAB4vFIJp5wRkeyPxAQ9RJGKPqbqVvKO0mKuIl8ec8o/uhmCjImkVxP+7sgiYWmMt8FvcOXmlQiTNWFiWlrbpbqgwAAAAAAAAoyMIIKLjCCCdSgAwIBAgIQPXLliLm882kZCaE1O2AJQTAKBggqhkjOPQQDAjCBkjELMAkGA1UEBhMCR0IxGzAZBgNVBAgTEkdyZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBxMHU2FsZm9yZDEaMBgGA1UEChMRQ09NT0RPIENBIExpbWl0ZWQxODA2BgNVBAMTL0NPTU9ETyBFQ0MgRG9tYWluIFZhbGlkYXRpb24gU2VjdXJlIFNlcnZlciBDQSAyMB4XDTE4MDYxODAwMDAwMFoXDTE4MTIyNTIzNTk1OVowazEhMB8GA1UECxMYRG9tYWluIENvbnRyb2wgVmFsaWRhdGVkMSEwHwYDVQQLExhQb3NpdGl2ZVNTTCBNdWx0aS1Eb21haW4xIzAhBgNVBAMTGnNuaTM3NTM5LmNsb3VkZmxhcmVzc2wuY29tMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE85/PEWijoj1UwV8dc2plaLU2Q94jh5XJyL7n86thOXVHJrf6I7Lin0f1gxqfxQTXlvIQ8UjAyx8CTcAC4LC3RqOCCDAwgggsMB8GA1UdIwQYMBaAFEAJYWfwvINxT94SCCxv1NQrdj2WMB0GA1UdDgQWBBQMSCk8MNsWyag4Jn6C3/a29fX7/TAOBgNVHQ8BAf8EBAMCB4AwDAYDVR0TAQH/BAIwADAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwTwYDVR0gBEgwRjA6BgsrBgEEAbIxAQICBzArMCkGCCsGAQUFBwIBFh1odHRwczovL3NlY3VyZS5jb21vZG8uY29tL0NQUzAIBgZngQwBAgEwVgYDVR0fBE8wTTBLoEmgR4ZFaHR0cDovL2NybC5jb21vZG9jYTQuY29tL0NPTU9ET0VDQ0RvbWFpblZhbGlkYXRpb25TZWN1cmVTZXJ2ZXJDQTIuY3JsMIGIBggrBgEFBQcBAQR8MHowUQYIKwYBBQUHMAKGRWh0dHA6Ly9jcnQuY29tb2RvY2E0LmNvbS9DT01PRE9FQ0NEb21haW5WYWxpZGF0aW9uU2VjdXJlU2VydmVyQ0EyLmNydDAlBggrBgEFBQcwAYYZaHR0cDovL29jc3AuY29tb2RvY2E0LmNvbTCCBW8GA1UdEQSCBWYwggVighpzbmkzNzUzOS5jbG91ZGZsYXJlc3NsLmNvbYISKi4xcGF0dGVybmhvbWUwLmdhgg8qLjU5ZGVza3RvcDIuZ3GCDyouNmRlc2lnbmhkMS5jZoISKi5hbGVydG9waW5pb24uY29tgiAqLmJjYXJkLXNlY3VyZS1sZGVudHZlcmZhaHJlbi5ydYINKi5ib2JvbHRzLmNvbYIUKi5jaGVhcHNhbmRpc2trcWQuZ2GCGSouY29tZXRvZ2V0aGVyYm93bmVzcy5jb22CFSouZGVza3RvcHdhbGw4d2FsbC5nYYIMKi5maHZpcHMuY29tgg4qLmZvanRva2xvay50a4IPKi5mcmVnYXQtc3BiLnJ1ggwqLmZyaXNvbnMuZnKCCiouZ292bm8ubWyCCiouaHJ5MjQuc2uCCiouaTN3bS5vcmeCDiouamN2YWVib29rLm1sgg4qLmtvdm50aWtpcy5jZoIUKi5sZXF1YXJ0aWVybGF0aW4uZnKCHCoubWFtbXV0bW91bnRhaW5zY2hvb2wuY28udWuCDioubW9iaWxlMzE1LmNmghEqLm1vdmllc2hlbHBlci5tbIIQKi5wYXR0ZXJuaGQ1Ni5nYYIbKi5wY2tleW5vdGlmaWNhdGlvbnMucmV2aWV3ggwqLnJpY2Zvc3MuZ3GCDyoucm9idXN0aXJjLm5ldIIXKi5zZWxmYnVpbGRuZXdob21lcy5jb22CEyouc3BtaW5zdHJ1bWVmbnQuZ3GCDSouc3V0YXplMjQuc2uCECoudG9tYm9ib2x0cy5jb22CDioudHJlbmRpZnkuY29tghIqLndhbHkta3Jhd2N6eWsucGyCECoud2hlaGVsYmFzZXMuZ2GCGyoud2luZG93c25vdy5hbHRlcnZpc3RhLm9yZ4IMKi54MTF2aXMub3JnghAqLnh4eHZvdGUucmV2aWV3gg4qLnphYmF2dm5lcy50a4IMKi56ZWtqdXIubmV0ghAxcGF0dGVybmhvbWUwLmdhgg01OWRlc2t0b3AyLmdxgg02ZGVzaWduaGQxLmNmghBhbGVydG9waW5pb24uY29tgh5iY2FyZC1zZWN1cmUtbGRlbnR2ZXJmYWhyZW4ucnWCC2JvYm9sdHMuY29tghJjaGVhcHNhbmRpc2trcWQuZ2GCF2NvbWV0b2dldGhlcmJvd25lc3MuY29tghNkZXNrdG9wd2FsbDh3YWxsLmdhggpmaHZpcHMuY29tggxmb2p0b2tsb2sudGuCDWZyZWdhdC1zcGIucnWCCmZyaXNvbnMuZnKCCGdvdm5vLm1sgghocnkyNC5za4IIaTN3bS5vcmeCDGpjdmFlYm9vay5tbIIMa292bnRpa2lzLmNmghJsZXF1YXJ0aWVybGF0aW4uZnKCGm1hbW11dG1vdW50YWluc2Nob29sLmNvLnVrggxtb2JpbGUzMTUuY2aCD21vdmllc2hlbHBlci5tbIIOcGF0dGVybmhkNTYuZ2GCGXBja2V5bm90aWZpY2F0aW9ucy5yZXZpZXeCCnJpY2Zvc3MuZ3GCDXJvYnVzdGlyYy5uZXSCFXNlbGZidWlsZG5ld2hvbWVzLmNvbYIRc3BtaW5zdHJ1bWVmbnQuZ3GCC3N1dGF6ZTI0LnNrgg50b21ib2JvbHRzLmNvbYIMdHJlbmRpZnkuY29tghB3YWx5LWtyYXdjenlrLnBsgg53aGVoZWxiYXNlcy5nYYIZd2luZG93c25vdy5hbHRlcnZpc3RhLm9yZ4IKeDExdmlzLm9yZ4IOeHh4dm90ZS5yZXZpZXeCDHphYmF2dm5lcy50a4IKemVranVyLm5ldDCCAQQGCisGAQQB1nkCBAIEgfUEgfIA8AB2AO5Lvbd1zmC64UJpH6vhnmajD35fsHLYgwDEe4l6qP3LAAABZBCprdMAAAQDAEcwRQIgIgozFgA49lPG0PTy86Gd/wuc3BOrr4+AFhLaI1INoscCIQCSdmTrrQGI2hjPPDxQeumP9FMB3vXdcMygJ7oZs8bEmQB2ANt0r+7LKeyx/so+cW0s5bmquzb3hHGDx12dTze2H79kAAABZBCprhEAAAQDAEcwRQIgRwAp0+HPf1ToWJOs12X8gDriAWDJgrWG+nDh8oBloxICIQC93XqUG41zYtM8a78fbxa8OImGK84WgyY3Xe+J89zA/TAKBggqhkjOPQQDAgNIADBFAiEAq+a7c5+0UydAQ3cOE8CWxz6yaKiF5AUBV5yKQY11SHoCIFq2GIYE+SKsAf129MqI3f5ipQLnUuqgN/VnAHydFnUiEwEDBAAAAAABAQAAAAAAAAZ4MjU1MTkAAAARRUNEU0EtUDI1Ni1TSEEyNTYBlZ+xZWUXSH+rm9iRO+Uxl650zaXNL0c/lvXwt//2LGgAAAADZgoyJpFcT/u7IImFpjLfBb3Dl5pUIkzVhYlpa26W6oMAAAAAAAAKMjCCCi4wggnUoAMCAQICED1y5Yi5vPNpGQmhNTtgCUEwCgYIKoZIzj0EAwIwgZIxCzAJBgNVBAYTAkdCMRswGQYDVQQIExJHcmVhdGVyIE1hbmNoZXN0ZXIxEDAOBgNVBAcTB1NhbGZvcmQxGjAYBgNVBAoTEUNPTU9ETyBDQSBMaW1pdGVkMTgwNgYDVQQDEy9DT01PRE8gRUNDIERvbWFpbiBWYWxpZGF0aW9uIFNlY3VyZSBTZXJ2ZXIgQ0EgMjAeFw0xODA2MTgwMDAwMDBaFw0xODEyMjUyMzU5NTlaMGsxITAfBgNVBAsTGERvbWFpbiBDb250cm9sIFZhbGlkYXRlZDEhMB8GA1UECxMYUG9zaXRpdmVTU0wgTXVsdGktRG9tYWluMSMwIQYDVQQDExpzbmkzNzUzOS5jbG91ZGZsYXJlc3NsLmNvbTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABPOfzxFoo6I9VMFfHXNqZWi1NkPeI4eVyci+5/OrYTl1Rya3+iOy4p9H9YMan8UE15byEPFIwMsfAk3AAuCwt0ajgggwMIIILDAfBgNVHSMEGDAWgBRACWFn8LyDcU/eEggsb9TUK3Y9ljAdBgNVHQ4EFgQUDEgpPDDbFsmoOCZ+gt/2tvX1+/0wDgYDVR0PAQH/BAQDAgeAMAwGA1UdEwEB/wQCMAAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCME8GA1UdIARIMEYwOgYLKwYBBAGyMQECAgcwKzApBggrBgEFBQcCARYdaHR0cHM6Ly9zZWN1cmUuY29tb2RvLmNvbS9DUFMwCAYGZ4EMAQIBMFYGA1UdHwRPME0wS6BJoEeGRWh0dHA6Ly9jcmwuY29tb2RvY2E0LmNvbS9DT01PRE9FQ0NEb21haW5WYWxpZGF0aW9uU2VjdXJlU2VydmVyQ0EyLmNybDCBiAYIKwYBBQUHAQEEfDB6MFEGCCsGAQUFBzAChkVodHRwOi8vY3J0LmNvbW9kb2NhNC5jb20vQ09NT0RPRUNDRG9tYWluVmFsaWRhdGlvblNlY3VyZVNlcnZlckNBMi5jcnQwJQYIKwYBBQUHMAGGGWh0dHA6Ly9vY3NwLmNvbW9kb2NhNC5jb20wggVvBgNVHREEggVmMIIFYoIac25pMzc1MzkuY2xvdWRmbGFyZXNzbC5jb22CEiouMXBhdHRlcm5ob21lMC5nYYIPKi41OWRlc2t0b3AyLmdxgg8qLjZkZXNpZ25oZDEuY2aCEiouYWxlcnRvcGluaW9uLmNvbYIgKi5iY2FyZC1zZWN1cmUtbGRlbnR2ZXJmYWhyZW4ucnWCDSouYm9ib2x0cy5jb22CFCouY2hlYXBzYW5kaXNra3FkLmdhghkqLmNvbWV0b2dldGhlcmJvd25lc3MuY29tghUqLmRlc2t0b3B3YWxsOHdhbGwuZ2GCDCouZmh2aXBzLmNvbYIOKi5mb2p0b2tsb2sudGuCDyouZnJlZ2F0LXNwYi5ydYIMKi5mcmlzb25zLmZyggoqLmdvdm5vLm1sggoqLmhyeTI0LnNrggoqLmkzd20ub3Jngg4qLmpjdmFlYm9vay5tbIIOKi5rb3ZudGlraXMuY2aCFCoubGVxdWFydGllcmxhdGluLmZyghwqLm1hbW11dG1vdW50YWluc2Nob29sLmNvLnVrgg4qLm1vYmlsZTMxNS5jZoIRKi5tb3ZpZXNoZWxwZXIubWyCECoucGF0dGVybmhkNTYuZ2GCGyoucGNrZXlub3RpZmljYXRpb25zLnJldmlld4IMKi5yaWNmb3NzLmdxgg8qLnJvYnVzdGlyYy5uZXSCFyouc2VsZmJ1aWxkbmV3aG9tZXMuY29tghMqLnNwbWluc3RydW1lZm50Lmdxgg0qLnN1dGF6ZTI0LnNrghAqLnRvbWJvYm9sdHMuY29tgg4qLnRyZW5kaWZ5LmNvbYISKi53YWx5LWtyYXdjenlrLnBsghAqLndoZWhlbGJhc2VzLmdhghsqLndpbmRvd3Nub3cuYWx0ZXJ2aXN0YS5vcmeCDCoueDExdmlzLm9yZ4IQKi54eHh2b3RlLnJldmlld4IOKi56YWJhdnZuZXMudGuCDCouemVranVyLm5ldIIQMXBhdHRlcm5ob21lMC5nYYINNTlkZXNrdG9wMi5ncYINNmRlc2lnbmhkMS5jZoIQYWxlcnRvcGluaW9uLmNvbYIeYmNhcmQtc2VjdXJlLWxkZW50dmVyZmFocmVuLnJ1ggtib2JvbHRzLmNvbYISY2hlYXBzYW5kaXNra3FkLmdhghdjb21ldG9nZXRoZXJib3duZXNzLmNvbYITZGVza3RvcHdhbGw4d2FsbC5nYYIKZmh2aXBzLmNvbYIMZm9qdG9rbG9rLnRrgg1mcmVnYXQtc3BiLnJ1ggpmcmlzb25zLmZygghnb3Zuby5tbIIIaHJ5MjQuc2uCCGkzd20ub3JnggxqY3ZhZWJvb2subWyCDGtvdm50aWtpcy5jZoISbGVxdWFydGllcmxhdGluLmZyghptYW1tdXRtb3VudGFpbnNjaG9vbC5jby51a4IMbW9iaWxlMzE1LmNmgg9tb3ZpZXNoZWxwZXIubWyCDnBhdHRlcm5oZDU2LmdhghlwY2tleW5vdGlmaWNhdGlvbnMucmV2aWV3ggpyaWNmb3NzLmdxgg1yb2J1c3RpcmMubmV0ghVzZWxmYnVpbGRuZXdob21lcy5jb22CEXNwbWluc3RydW1lZm50LmdxggtzdXRhemUyNC5za4IOdG9tYm9ib2x0cy5jb22CDHRyZW5kaWZ5LmNvbYIQd2FseS1rcmF3Y3p5ay5wbIIOd2hlaGVsYmFzZXMuZ2GCGXdpbmRvd3Nub3cuYWx0ZXJ2aXN0YS5vcmeCCngxMXZpcy5vcmeCDnh4eHZvdGUucmV2aWV3ggx6YWJhdnZuZXMudGuCCnpla2p1ci5uZXQwggEEBgorBgEEAdZ5AgQCBIH1BIHyAPAAdgDuS723dc5guuFCaR+r4Z5mow9+X7By2IMAxHuJeqj9ywAAAWQQqa3TAAAEAwBHMEUCICIKMxYAOPZTxtD08vOhnf8LnNwTq6+PgBYS2iNSDaLHAiEAknZk660BiNoYzzw8UHrpj/RTAd713XDMoCe6GbPGxJkAdgDbdK/uyynssf7KPnFtLOW5qrs294Rxg8ddnU83th+/ZAAAAWQQqa4RAAAEAwBHMEUCIEcAKdPhz39U6FiTrNdl/IA64gFgyYK1hvpw4fKAZaMSAiEAvd16lBuNc2LTPGu/H28WvDiJhivOFoMmN13vifPcwP0wCgYI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 request-method GET request-Accept-Encoding gzip, deflate, br response-head HTTP/2.0 200 OK
+content-type: application/octet-stream
+content-length: 8104
+last-modified: Mon, 21 Dec 2015 08:00:44 GMT
+access-control-allow-origin: *
+x-github-request-id: BFCC:6B12:6382A1D:84C047E:5B2656D3
+accept-ranges: bytes
+date: Wed, 20 Jun 2018 10:05:05 GMT
+via: 1.1 varnish
+cache-control: max-age=600
+expires: Sun, 17 Jun 2018 12:50:51 GMT
+age: 493
+x-served-by: cache-bma1620-BMA
+x-cache: HIT
+x-cache-hits: 1
+x-timer: S1529489105.221493,VS0,VE0
+vary: Accept-Encoding
+x-fastly-request-id: a9b344f49351ebd52b7bdd1255130c9361082e7e
+expect-ct: max-age=604800, report-uri="https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct"
+server: cloudflare
+cf-ray: 42dd6a3b9c463cd1-CPH
+X-Firefox-Spdy: h2
+ original-response-headers date: Wed, 20 Jun 2018 10:05:03 GMT
+content-type: application/octet-stream
+content-length: 8104
+last-modified: Mon, 21 Dec 2015 08:00:44 GMT
+access-control-allow-origin: *
+expires: Sun, 17 Jun 2018 12:50:51 GMT
+cache-control: max-age=600
+x-github-request-id: BFCC:6B12:6382A1D:84C047E:5B2656D3
+accept-ranges: bytes
+via: 1.1 varnish
+age: 491
+x-served-by: cache-bma1631-BMA
+x-cache: HIT
+x-cache-hits: 1
+x-timer: S1529489104.924497,VS0,VE0
+vary: Accept-Encoding
+x-fastly-request-id: e3663deb50e61733cc62fe92f670c73093db4539
+expect-ct: max-age=604800, report-uri="https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct"
+server: cloudflare
+cf-ray: 42dd6a336f2f3cd1-CPH
+X-Firefox-Spdy: h2
+ necko:classified 1   ¨

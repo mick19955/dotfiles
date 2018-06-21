@@ -1,0 +1,46 @@
+[2018-06-20 08:49:40.463] [sharedprocess] [info] main {"machineId":"06cc32faabd936a9a245cc0c966d0b264e2b14619c067eccbf19f1a24bcffd21"}
+[2018-06-20 08:49:40.488] [sharedprocess] [info] Scanned user extensions: 0
+[2018-06-20 08:49:40.523] [sharedprocess] [info] Scanned system extensions: 70
+[2018-06-20 08:49:41.215] [sharedprocess] [info] Scanned user extensions: 0
+[2018-06-20 08:49:41.222] [sharedprocess] [info] Scanned user extensions: 0
+[2018-06-20 08:49:41.226] [sharedprocess] [info] Scanned user extensions: 0
+[2018-06-20 08:49:41.234] [sharedprocess] [info] Scanned user extensions: 0
+[2018-06-20 08:49:41.294] [sharedprocess] [info] Scanned system extensions: 70
+[2018-06-20 08:49:41.296] [sharedprocess] [info] Scanned system extensions: 70
+[2018-06-20 08:49:41.298] [sharedprocess] [info] Scanned system extensions: 70
+[2018-06-20 08:49:44.130] [sharedprocess] [info] Scanned user extensions: 0
+[2018-06-20 08:50:20.468] [sharedprocess] [info] Starting to clean up unused language packs.
+[2018-06-20 08:52:05.942] [sharedprocess] [info] Scanned user extensions: 0
+[2018-06-20 08:52:05.946] [sharedprocess] [info] Scanned user extensions: 0
+[2018-06-20 08:52:05.947] [sharedprocess] [info] Scanned user extensions: 0
+[2018-06-20 08:52:05.999] [sharedprocess] [info] Scanned system extensions: 70
+[2018-06-20 08:52:06.004] [sharedprocess] [info] Scanned system extensions: 70
+[2018-06-20 08:52:12.323] [sharedprocess] [info] Installing extension: python
+[2018-06-20 08:52:12.325] [sharedprocess] [info] Scanned user extensions: 0
+[2018-06-20 08:52:16.467] [sharedprocess] [info] Downloaded extension: python
+[2018-06-20 08:52:19.223] [sharedprocess] [info] Extracted extension to /home/mick19955/.vscode/extensions/.ms-python.python-2018.5.0: ms-python.python-2018.5.0
+[2018-06-20 08:52:19.223] [sharedprocess] [info] Renamed to /home/mick19955/.vscode/extensions/ms-python.python-2018.5.0
+[2018-06-20 08:52:19.223] [sharedprocess] [info] Installation completed. ms-python.python-2018.5.0
+[2018-06-20 08:52:19.253] [sharedprocess] [info] Extensions installed successfully: ms-python.python
+[2018-06-20 08:52:19.384] [sharedprocess] [info] Scanned user extensions: 1
+[2018-06-20 08:52:19.385] [sharedprocess] [info] Scanned user extensions: 1
+[2018-06-20 08:52:19.427] [sharedprocess] [info] Scanned system extensions: 70
+[2018-06-20 08:52:19.428] [sharedprocess] [info] Scanned system extensions: 70
+[2018-06-20 08:52:22.370] [sharedprocess] [info] Installing extension: cpptools
+[2018-06-20 08:52:22.374] [sharedprocess] [info] Scanned user extensions: 1
+[2018-06-20 08:52:23.331] [sharedprocess] [info] Downloaded extension: cpptools
+[2018-06-20 08:52:23.612] [sharedprocess] [info] Extracted extension to /home/mick19955/.vscode/extensions/.ms-vscode.cpptools-0.17.4: ms-vscode.cpptools-0.17.4
+[2018-06-20 08:52:23.612] [sharedprocess] [info] Renamed to /home/mick19955/.vscode/extensions/ms-vscode.cpptools-0.17.4
+[2018-06-20 08:52:23.612] [sharedprocess] [info] Installation completed. ms-vscode.cpptools-0.17.4
+[2018-06-20 08:52:23.651] [sharedprocess] [info] Extensions installed successfully: ms-vscode.cpptools
+[2018-06-20 08:52:23.769] [sharedprocess] [info] Scanned user extensions: 2
+[2018-06-20 08:52:23.782] [sharedprocess] [info] Scanned system extensions: 70
+[2018-06-20 08:52:56.208] [sharedprocess] [info] Installing extension: latex-workshop
+[2018-06-20 08:52:56.212] [sharedprocess] [info] Scanned user extensions: 2
+[2018-06-20 08:52:57.588] [sharedprocess] [info] Downloaded extension: latex-workshop
+[2018-06-20 08:52:58.508] [sharedprocess] [info] Extracted extension to /home/mick19955/.vscode/extensions/.james-yu.latex-workshop-5.5.1: james-yu.latex-workshop-5.5.1
+[2018-06-20 08:52:58.509] [sharedprocess] [info] Renamed to /home/mick19955/.vscode/extensions/james-yu.latex-workshop-5.5.1
+[2018-06-20 08:52:58.509] [sharedprocess] [info] Installation completed. james-yu.latex-workshop-5.5.1
+[2018-06-20 08:52:58.541] [sharedprocess] [info] Extensions installed successfully: james-yu.latex-workshop
+[2018-06-20 08:52:58.660] [sharedprocess] [info] Scanned user extensions: 3
+[2018-06-20 08:52:58.680] [sharedprocess] [info] Scanned system extensions: 70

@@ -1,0 +1,94 @@
+{
+  "ruleset": [
+    {
+      "condition": "/^[a-z][a-z].gov$/.test(SLD)",
+      "consequent": "QLD + '.' + SLD",
+      "description": "governmental sites"
+    },
+    {
+      "condition": "TLD === 'gov' || /^go.[a-z][a-z]$/.test(TLD) || /^gov.[a-z][a-z]$/.test(TLD)",
+      "consequent": "SLD",
+      "description": "governmental sites"
+    },
+    {
+      "condition": "SLD === 'keybase.pub'",
+      "consequent": "QLD + '.' + SLD",
+      "description": "keybase users"
+    },
+    {
+      "condition": true,
+      "consequent": "SLD",
+      "description": "the default rule"
+    }
+  ],
+  "personaId": "89f59ed5-5c1e-457f-945d-31523d6e1450",
+  "persona": "{\"userId\":\"89f59ed55c1e57f945d31523d6e1450\",\"registrarVK\":\"==========ANONLOGIN_VK_BEG==========\\n5Zo7fjdryszdwgAZO+HiK18yErXRoPvRkmYmo4E2UQV 4NMDAdwHg0z3LdGN3KkOoFLbza3SpeUWBcMKOUvJ8O1 1\\n7MpAGVMgs+tuMQs4pH+nKUh0M+rl21RyUAdhRHKGhq4 5LXnl7uUw0XwaSTIojyDh4hODTEcT5BAiAhPCGIItDM 1\\n2qtVvVwfxlDGzPSXXl0Ms94eycXiUJpthRp6uAjrjW8 Auhpv58KOuncZfXB1eekbOwTXloSAgPPRJ3A1g2a1MZ 1\\n41nN9zSpWB6xfefhy/BWOouZnE5Vz+Akgtu3WavASEJ AF4pxNogZT38xdPdxe51RIGaFXKNVj3K2vbfN3uzI1T 1\\n31ND6Q8qewDElWUU88rMWn4RZl95sjbSvoimlfsVFEg 8VjyRwkfd4dWwMQhShAIiyY0L9tOiJIR4PWlRIwyQs6 wLm/Ph3gh2ZtdqNbGJIcQM1LoCr+23zELEwUKvAnSL 1sWQdlB2UL0xSqgNcb9NObxiSof322GgHUg2nq43Y4l 1 0\\n===========ANONLOGIN_VK_END==========\",\"masterUserToken\":\"==========ANONLOGIN_CRED_BEG==========\\n89f59ed55c1e57f945d31523d6e1450\\n6jgABGspGMUHNCFSteINN37rdXQ4LGqqxwy/AbCLXyU\\n2iHStwcUdwmNk+frWXccs3c4pvs5LgUrQjLyhZl5WS6 2jglcoJCl4PEKp63ZVkoNM5v5crimqN77pWagbuKfIs 1\\nEEa/1BcDexikDs/hzMnoahNjvK04D21YYpxQNhvrwKG\\n9d0ThQnmreTqTzx+vnfS+bGkkXHEZXkXHelBy97mOsQ\\n===========ANONLOGIN_CRED_END==========\"}",
+  "ballots": [],
+  "rulesV2Stamp": "6444889823999164417",
+  "bootStamp": 1529483600727,
+  "properties": {
+    "setting": "adFree",
+    "fee": {
+      "currency": "BAT",
+      "amount": 15
+    },
+    "days": 30,
+    "wallet": {
+      "keyinfo": {
+        "seed": {
+          "0": 101,
+          "1": 16,
+          "2": 98,
+          "3": 52,
+          "4": 53,
+          "5": 3,
+          "6": 220,
+          "7": 86,
+          "8": 104,
+          "9": 88,
+          "10": 185,
+          "11": 69,
+          "12": 29,
+          "13": 57,
+          "14": 146,
+          "15": 129,
+          "16": 35,
+          "17": 45,
+          "18": 23,
+          "19": 81,
+          "20": 244,
+          "21": 0,
+          "22": 243,
+          "23": 177,
+          "24": 250,
+          "25": 201,
+          "26": 218,
+          "27": 222,
+          "28": 100,
+          "29": 14,
+          "30": 206,
+          "31": 121
+        }
+      },
+      "paymentId": "b32f9bfa-04bb-405a-bb19-cbc769f75005",
+      "addresses": {
+        "BAT": "0xF84B7E369eeBFc91Acb2656b09c42C76B9B6b6f4",
+        "BTC": "1E2WAp8jSYCvBoM15HzXbZLJUNyobMn48d",
+        "CARD_ID": "139c716c-d3a2-43f8-b3cd-510081c5419b",
+        "ETH": "0xF84B7E369eeBFc91Acb2656b09c42C76B9B6b6f4",
+        "LTC": "Ld9RVtuxT6jgD8mznWTJGM4LgdweopiatL"
+      }
+    }
+  },
+  "reconcileStamp": 1532075600727,
+  "transactions": [],
+  "memos": [
+    "{\"who\":\"sync\",\"what\":{\"reconcileStamp\":1530693197254,\"reconcileDate\":\"2018-07-04T08:33:17.254Z\"},\"when\":1529483597254}"
+  ],
+  "batch": {},
+  "options": {
+    "prefix": "/v2",
+    "environment": "production",
+    "version": "v2"
+  }
+}

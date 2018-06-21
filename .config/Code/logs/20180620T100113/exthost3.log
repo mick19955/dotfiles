@@ -1,0 +1,12 @@
+[2018-06-20 10:01:15.064] [exthost3] [info] extension host started
+[2018-06-20 10:01:15.091] [exthost3] [info] ExtensionService#_doActivateExtension vscode.emmet {"startup":true,"activationEvent":"*"}
+[2018-06-20 10:01:15.091] [exthost3] [info] ExtensionService#loadCommonJSModule /opt/visual-studio-code/resources/app/extensions/emmet/out/extension
+[2018-06-20 10:01:15.138] [exthost3] [info] ExtensionService#_doActivateExtension vscode.git {"startup":true,"activationEvent":"*"}
+[2018-06-20 10:01:15.138] [exthost3] [info] ExtensionService#loadCommonJSModule /opt/visual-studio-code/resources/app/extensions/git/out/main
+[2018-06-20 10:01:15.263] [exthost3] [info] ExtensionService#_doActivateExtension vscode.merge-conflict {"startup":true,"activationEvent":"*"}
+[2018-06-20 10:01:15.263] [exthost3] [info] ExtensionService#loadCommonJSModule /opt/visual-studio-code/resources/app/extensions/merge-conflict/out/extension
+[2018-06-20 10:01:15.272] [exthost3] [info] ExtensionService#_doActivateExtension vscode.search-rg {"startup":true,"activationEvent":"*"}
+[2018-06-20 10:01:15.272] [exthost3] [info] ExtensionService#loadCommonJSModule /opt/visual-studio-code/resources/app/extensions/search-rg/out/extension
+[2018-06-20 10:01:15.275] [exthost3] [info] ExtensionService#_doActivateExtension etmoffat.pip-packages {"startup":true,"activationEvent":"*"}
+[2018-06-20 10:01:15.275] [exthost3] [info] ExtensionService#loadCommonJSModule /home/mick19955/.vscode/extensions/etmoffat.pip-packages-0.4.3/out/pip-updater
+[2018-06-20 10:01:15.283] [exthost3] [info] eager extensions activated

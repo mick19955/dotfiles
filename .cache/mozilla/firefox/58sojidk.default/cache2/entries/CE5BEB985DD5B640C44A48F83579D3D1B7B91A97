@@ -1,0 +1,567 @@
+/*
+ * FreeBSD.org - Layout Styles
+ *
+ * $FreeBSD: head/en_US.ISO8859-1/htdocs/layout/css/layout.css 50639 2017-08-06 06:09:38Z delphij $
+ */
+
+/* Container Definitions */
+
+/* Page Container */
+
+#containerwrap {
+  text-align: center; /* Win IE5 */
+}
+
+#container {
+  margin: 0em auto;
+  width: 90%;
+  padding: 0;
+  padding-top: 0px;
+  padding-bottom: 15px;
+  text-align: left; /* Win IE5 */
+}
+
+/* Header */
+
+#headercontainer {
+  padding-bottom: 2px;
+}
+
+#header {
+  position: relative;
+  height: 15%;
+  margin: 0;
+  padding: 0;
+  clear: both;
+}
+
+#headerlogoleft {
+  position: relative;
+  border: 0px;
+  padding: 0px;
+  top: 0px;
+  float: left;
+}
+
+#headerlogoleft img {
+  border: 0px;
+}
+
+#headerlogoright {
+  position: relative;
+  border: 0px;
+  padding-left: 0px;
+  float: right;
+}
+
+#headerlogoright img {
+  border: 0px;
+}
+
+/* Search */
+
+@media screen {
+#search {
+  position: relative;
+  text-align: right;
+  padding: 0;
+  margin: 0;
+  margin-top: 6px;
+  color: #666;
+}
+
+#search form {
+  position: relative;
+  top: 5px;
+  right: 0;
+  margin: 0; /* need for IE Mac */
+  text-align: right; /* need for IE Mac */
+  white-space: nowrap; /* for Opera */
+}
+
+#search form label {
+  color: #666;
+}
+
+#search form #submit {
+  background: transparent;
+  color: #fff;
+  border-right: 1px solid #DADADA;
+  border-bottom: 1px solid #DADADA;
+  border-top: 1px solid #DADADA;
+  border-left: 1px solid #DADADA;
+  padding: 1px 5px 1px 5px;
+}
+
+#search form #words {
+  width: 50%;
+  border: 1px solid #DADADA;
+  background: #FFFFFF;
+  color: #666;
+  padding: 2px 2px 2px 5px;
+}
+}
+
+@media print {
+#search { display: none; }
+}
+
+/* Mirror Select */
+
+#mirror {
+  text-align: right;
+  padding: 0;
+  margin: 0;
+  margin-top: 6px;
+  color: #666;
+}
+
+#mirror form {
+  padding-top: 5px;
+  right: 0;
+  margin: 0; /* need for IE Mac */
+  text-align: right; /* need for IE Mac */
+  white-space: nowrap; /* for Opera */
+}
+
+#mirror form label {
+  color: #666;
+  font-size: 0.8em;
+}
+
+#mirror form select {
+  font-size: 0.8em;
+}
+
+#mirror form #mirrorsel {
+  font-size: 0.8em;
+  width: 150px;
+  border: 1px solid #DADADA;
+  background: #FFFFFF;
+  color: #666;
+}
+
+#mirror input {
+  font-size: 0.8em;
+  background: transparent;
+  color: #666;
+  border: 1px solid #DADADA;
+}
+
+/* Content */
+
+#content {
+  clear: both;
+  display: block;
+}
+
+#frontcontainer {
+  width: 100%;
+}
+
+#frontfeaturecontainer {
+  clear: both;
+}
+
+#frontfeatureleft{
+  width: 30%;
+  margin: 0;
+  padding: 0;
+  float: left;
+}
+
+#frontfeatureleft h2 {
+  border: none;
+  margin-top: 0;
+}
+
+#frontfeatureleft p {
+  margin: 0 0 1em 0;
+}
+
+	#frontfeaturecontent {
+	  margin: 10px 10px 10px 13px;
+	}
+
+#frontfeaturemiddle {
+  float: left;
+  margin-top: 20px;
+  background: url(../images/beastie.png) no-repeat top left;
+  min-height: 196px;
+  width: 30%;
+}
+
+#frontfeatureright {
+  position: relative;
+  border: 0px;
+  padding: 0px;
+  margin: 0px;
+  width: 30%;
+  float: right;
+}
+
+/* News/Events/Media/Security Box */
+
+#frontnemscontainer {
+  width: 100%;
+  background: #eee;
+  display: inline;
+  float: left;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+#frontnews {
+  width: 24%;
+  margin: 0;
+  padding: 0;
+  float: left;
+}
+
+#frontnewscontent {
+  margin: 17px 15px 24px 18px;
+}
+
+#frontevents {
+  width: 24%;
+  margin: 0;
+  padding: 0;
+  float: left;
+}
+
+#fronteventscontent {
+  margin: 17px 15px 24px 14px;
+}
+
+#frontmedia {
+  width: 24%;
+  margin: 0;
+  padding: 0;
+  float: left;
+}
+
+#frontmediacontent {
+  margin: 17px 15px 24px 14px;
+}
+
+#frontsecurity {
+  width: 24%;
+  margin: 0;
+  padding: 0;
+  float: left;
+}
+
+#frontsecuritycontent {
+  margin: 17px 15px 24px 14px;
+}
+
+/* No way to get equal columns in pure CSS - setting height is a temporary hack */
+.frontseparator {
+  width: 0.5%;
+  height: 500px;
+  margin: 0;
+  padding: 0;
+  background-color: #fff;
+  float: left;
+}
+
+.newseventswrap {
+  padding-left: 5px;
+}
+
+.newseventslist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: inline;
+}
+
+.newseventslist img.rssimage {
+  display: inline;
+  border: 0;
+  vertical-align: bottom;
+}
+
+.newseventslist li {
+  padding: 0 0.3em 0 0.5em;
+  display: inline;
+  border-right: 1px solid #E1E1E1;
+}
+
+.newseventslist li a {
+}
+
+.newseventslist li.last-child {
+  border-right: 0;
+  padding-right: 0;
+}
+
+.newseventslist li.first-child {
+  padding-left: 0;
+}
+
+.newseventslist li.only-child {
+  border-right: 0;
+  padding-left: 0;
+}
+
+/* Shortcuts */
+
+#frontshortcuts {
+  margin: 0;
+  padding: 0;
+  color: #666;
+}
+
+#frontshortcutscontent {
+  float: right;
+  margin: 0;
+  padding: 0;
+  padding-left: 15px;
+  padding-top: 20px;
+}
+
+#frontshortcutslist {
+  margin: 0;
+  padding: 0;
+  margin-left: 5px;
+  margin-top: 5px;
+  list-style: none;
+}
+
+#frontshortcutslist li {
+  margin: 0;
+  padding-left: 12px;
+  background-image: url(../images/blt_red_arrow.png);
+  background-repeat: no-repeat;
+  background-position: 0px 0.5em;
+}
+
+/* Latest Releases */
+
+#frontreleases {
+  padding: 0;
+  margin: 8px;
+  margin-left: 190px;
+  margin-top: 5px;
+  padding-bottom: 20px;
+  color: #666;
+  width: 85%;
+}
+
+#frontreleasescontent {
+  margin: 0;
+  padding: 0;
+}
+
+#frontreleaseslist {
+  margin: 0;
+  padding: 0;
+  margin-left: 5px;
+  margin-top: 5px;
+  list-style: none;
+}
+
+#frontreleaseslist li {
+  margin: 0;
+  padding-left: 12px;
+  background-image: url(../images/blt_red_arrow.png);
+  background-repeat: no-repeat;
+  background-position: 0px 0.5em;
+}
+
+/* New User Box */
+
+ /* height and width details */
+.frontnewtop div, .frontnewtop, .frontnewbot div, .frontnewbot {
+  width: 100%;
+  height: 12px;
+}
+
+.frontnewcontent {
+  margin: 0;
+  padding: 0;
+  margin-top: -4px;
+  margin-bottom: -4px;
+  text-align: center;
+  font-size: 1.1em;
+  font-weight: bold;
+}
+
+.frontnewcontent a, .frontnewcontent a:link, .frontnewcontent a:visited, .frontnewcontent a:hover, .frontnewcontent a:active {
+  color: #990000;
+  text-decoration: none;
+}
+
+.frontnewroundbox {
+  float: left;
+  margin: 0;
+  margin-top: 30px;
+  padding: 0;
+  width: 130px;
+  background-color: #D8D8D8;
+  border-radius: 10px;
+}
+
+/* Donate Button */
+ /* height and width details */
+.frontdonatetop div, .frontdonatetop, .frontdonatebot div, .frontdonatebot {
+  width: 20%;
+  height: 10px;
+  font-size: 1px;
+  text-align: center;
+}
+
+.frontdonatecontent {
+  margin: 0;
+  padding: 0;
+  margin-top: -4px;
+  margin-bottom: -4px;
+  text-align: center;
+  font-size: 1.1em;
+  font-weight: bold;
+}
+
+.frontdonatecontent a, .frontdonatecontent a:link, .frontdonatecontent a:visited, .frontdonatecontent a:hover, .frontdonatecontent a:active {
+  color: #990000;
+  text-decoration: none;
+}
+
+.frontdonateroundbox {
+  margin-top: 0.5em;
+  padding: 0;
+  white-space: nowrap;
+  background-color: white;
+  border-radius: 10px;
+}
+
+/* Get FreeBSD Box */
+
+ /* height and width details */
+.frontgettop div, .frontgettop, .frontgetbot div, .frontgetbot {
+  width: 100%;
+  height: 18px;
+  font-size: 1px;
+}
+
+.frontgetcontent {
+  margin: 0;
+  padding: 0;
+  margin-top: -8px;
+  margin-bottom: -8px;
+  text-align: center;
+  font-size: 1.4em;
+  font-weight: bold;
+}
+
+.frontgetcontent a, .frontgetcontent a:link, .frontgetcontent a:visited, .frontgetcontent a:hover, .frontgetcontent a:active {
+  color: #990000;
+  text-decoration: none;
+}
+
+.frontgetroundbox {
+  margin-top: 50px;
+  margin-left: 160px;
+  padding: 0;
+  width: 190px;
+  background-color: #FACC2E;
+  border-radius: 15px;
+}
+
+/* Secondary Pages */
+
+@media screen {
+#sidewrap {
+  float: left;
+  width: 166px;
+  margin-top: 15px;
+  margin-right: -170px;
+}
+
+#rightwrap {
+  float: right;
+  width: 166px;
+  margin-left: 15px;
+}
+
+#contentwrap {
+  margin-left: 170px;
+  padding-top: 15px;
+}
+}
+
+@media print {
+#sidewrap, #rightwrap { display: none; }
+#contentwrap { margin-left: 16px; padding-top: 15px; }
+}
+
+/* Footer */
+
+#footer {
+  font-size: 0.9em;
+  text-align: center;
+  color: #737373;
+  line-height: 1.3em;
+  padding-top: 5px;
+  clear: both;
+}
+
+/* Misc Classes */
+
+.clearboth {
+  clear: both;
+  margin: 0;
+  padding: 0;
+}
+
+.blockhide {
+  display: none;
+  height: 0;
+  width: 0;
+  overflow: hidden;
+  position: absolute;  /* IE5 Mac */
+}
+
+img {
+  border: 0;
+}
+Â³þ©g      [*7i[*7i?0Ñ¥[,ØB   7    :https://www.freebsd.org/layout/css/layout.css?20150916 necko:classified 1 strongly-framed 1 security-info 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 request-method GET response-head HTTP/2.0 200 OK
+date: Wed, 20 Jun 2018 11:15:52 GMT
+content-type: text/css
+content-length: 8037
+last-modified: Wed, 20 Jun 2018 11:04:24 GMT
+etag: "5b2a34b8-1f65"
+server: ToTheCloud/v0.01
+expires: Fri, 22 Jun 2018 11:06:41 GMT
+cache-control: max-age=172800
+x-varnish: 5943538 235304
+age: 551
+via: 1.1 wfe0.ysv.FreeBSD.org
+x-cache: HIT
+accept-ranges: bytes
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-xss-protection: 1; mode=block
+x-frame-options: SAMEORIGIN
+content-security-policy: default-src 'self' https://www.freebsd.org/ https://docs.freebsd.org/; style-src 'self' https://www.freebsd.org/ https://docs.freebsd.org/ 'unsafe-inline'; script-src 'self' https://www.freebsd.org/ https://docs.freebsd.org/ https://ssl.google-analytics.com/ga.js 'unsafe-inline' resource: data: blob:; img-src 'self' https://www.freebsd.org/ https://docs.freebsd.org https://ssl.google-analytics.com/ https://chart.googleapis.com/ data: blob:; upgrade-insecure-requests
+X-Firefox-Spdy: h2
+ original-response-headers date: Wed, 20 Jun 2018 11:15:52 GMT
+content-type: text/css
+content-length: 8037
+last-modified: Wed, 20 Jun 2018 11:04:24 GMT
+etag: "5b2a34b8-1f65"
+server: ToTheCloud/v0.01
+expires: Fri, 22 Jun 2018 11:06:41 GMT
+cache-control: max-age=172800
+x-varnish: 5943538 235304
+age: 551
+via: 1.1 wfe0.ysv.FreeBSD.org
+x-cache: HIT
+accept-ranges: bytes
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-xss-protection: 1; mode=block
+x-frame-options: SAMEORIGIN
+content-security-policy: default-src 'self' https://www.freebsd.org/ https://docs.freebsd.org/; style-src 'self' https://www.freebsd.org/ https://docs.freebsd.org/ 'unsafe-inline'; script-src 'self' https://www.freebsd.org/ https://docs.freebsd.org/ https://ssl.google-analytics.com/ga.js 'unsafe-inline' resource: data: blob:; img-src 'self' https://www.freebsd.org/ https://docs.freebsd.org https://ssl.google-analytics.com/ https://chart.googleapis.com/ data: blob:; upgrade-insecure-requests
+X-Firefox-Spdy: h2
+ uncompressed-len 0 net-response-time-onstart 244 net-response-time-onstop 244   e

@@ -1,0 +1,818 @@
+/**
+ * attention - this function needs to be retired
+ * as it cannot accurately give url to the media file
+ */
+var mediaUrl = function (resource) {
+    return askbot.settings.static_url + 'default' + '/' + resource;
+};
+
+var getCookie = function (name) {
+    var cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        var cookies = document.cookie.split(';');
+        for (var i = 0; i < cookies.length; i++) {
+            var cookie = $.trim(cookies[i]);
+            // Does this cookie string begin with the name we want?
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                return decodeURIComponent(cookie.substring(name.length + 1));
+            }
+        }
+    }
+    return cookieValue;
+};
+
+var csrfSafeMethod = function(method) {
+    return (/^(GET|HEAD|OPTIONS|TRACE)$/.test(method));
+};
+
+var sameOrigin = function(url) {
+    var host = document.location.host;
+    var protocol = document.location.protocol;
+    var sr_origin = '//' + host;
+    var origin = protocol + sr_origin;
+    return (
+        (url == origin || url.slice(0, origin.length + 1) == origin + '/') ||
+        (url == sr_origin || url.slice(0, sr_origin.length + 1) == sr_origin + '/') ||
+        !(/^(\/\/|http:|https:).*/.test(url))
+
+    );
+};
+
+$.ajaxSetup({
+    beforeSend: function(xhr, settings) {
+        if (!csrfSafeMethod(settings.type) && sameOrigin(settings.url)) {
+            // Send the token to same-origin, relative URLs only.
+            // Send the token only if the method warrants CSRF protection
+            // Using the CSRFToken value acquired earlier
+            var csrfCookieName = askbot['settings']['csrfCookieName'];
+            xhr.setRequestHeader("X-CSRFToken", getCookie(csrfCookieName));
+        }
+    }
+});
+
+
+/**
+ * Selects template by class
+ * template selector must be a simple class selector
+ * e.g. .comment
+ */
+var getTemplate = function (templateSelector) {
+    var templates = $('.js-templates');
+    return templates.find(templateSelector).clone(false);
+};
+
+var cleanUrl = function (url) {
+    var re = new RegExp('//', 'g');
+    return url.replace(re, '/');
+};
+
+var copyAltToTitle = function (sel) {
+    sel.attr('title', sel.attr('alt'));
+};
+
+/**
+ * @returns jQuery with same content and classes,
+ * but different tag name (DOM node name)
+ */
+var setHtmlTag = function (fromElement, toTagName) {
+    if (fromElement.attr('tagName') === toTagName.toUpperCase()) {
+        return fromElement;
+    }
+    var newElement = $('<' + toTagName + '></' + toTagName + '>');
+    //copy classes
+    newElement.attr('class', fromElement.attr('class'));
+    //move contents
+    fromElement.children().detach().appendTo(newElement);
+    //@todo: maybe copy event handlers
+    //if element is in dom, insert new element and detach old element
+    if ($(document).find(fromElement)) {
+        fromElement.after(newElement);
+        fromElement.remove();
+    }
+    return newElement;
+};
+
+var animateHashes = function () {
+    var id_value = window.location.hash;
+    if (id_value !== '') {
+        var previous_color = $(id_value).css('background-color');
+        $(id_value).css('backgroundColor', '#FFF8C6');
+        $(id_value)
+            .animate({backgroundColor: '#ff7f2a'}, 500)
+            .animate({backgroundColor: '#FFF8C6'}, 500, function () {
+                $(id_value).css('backgroundColor', previous_color);
+            });
+    }
+};
+
+var addExtraCssClasses = function (element, setting) {
+    if (askbot.css && askbot.css[setting]) {
+        element.addClass(askbot.css[setting]);
+    }
+};
+
+/**
+ * @param {string} id_token - any token
+ * @param {string} unique_seed - the unique part
+ * @returns {string} unique id that can be used in DOM
+ */
+var askbotMakeId = function (id_token, unique_seed) {
+    return id_token + '-' + unique_seed;
+};
+
+var getNewUniqueInt = function () {
+    var num = askbot.data.uniqueInt || 0;
+    num = num + 1;
+    askbot.data.uniqueInt = num;
+    return num;
+};
+
+/**
+ * generic tag cleaning function, settings
+ * are from askbot live settings and askbot.const
+ */
+var cleanTag = function (tag_name, settings) {
+    var tag_regex = new RegExp(settings.tag_regex);
+    if (tag_regex.test(tag_name) === false) {
+        var firstChar = tag_name.substring(0, 1);
+        if (settings.tag_forbidden_first_chars.indexOf(firstChar) > -1) {
+            throw settings.messages.wrong_first_char;
+        } else {
+            throw settings.messages.wrong_chars;
+        }
+    }
+
+    var max_length = settings.max_tag_length;
+    if (tag_name.length > max_length) {
+        throw interpolate(
+            ngettext(
+                'must be shorter than %(max_chars)s character',
+                'must be shorter than %(max_chars)s characters',
+                max_length
+            ),
+            {'max_chars': max_length },
+            true
+        );
+    }
+    if (settings.force_lowercase_tags) {
+        return tag_name.toLowerCase();
+    } else {
+        return tag_name;
+    }
+};
+
+
+var getSingletonController = function (ControllerClass, name) {
+    askbot.controllers = askbot.controllers || {};
+    var controller = askbot.controllers[name];
+    if (controller === undefined) {
+        controller = new ControllerClass();
+        askbot.controllers[name] = controller;
+    }
+    return controller;
+};
+
+var setController = function (controller, name) {
+    askbot.controllers = askbot.controllers || {};
+    askbot.controllers[name] = controller;
+};
+
+var sortChildNodes = function (node, cmpFunc) {
+    var items = node.children().sort(cmpFunc);
+    node.append(items);
+};
+
+var getUniqueValues = function (values) {
+    var uniques = {};
+    var out = [];
+    $.each(values, function (idx, value) {
+        if (!(value in uniques)) {
+            uniques[value] = 1;
+            out.push(value);
+        }
+    });
+    return out;
+};
+
+var getUniqueWords = function (value) {
+    var words = $.trim(value).split(/\s+/);
+    return getUniqueValues(words);
+};
+
+/**
+ * comma-joins items and uses "and'
+ * between the last and penultimate items
+ * @param {Array<string>} values
+ * @return {string}
+ */
+var joinAsPhrase = function (values) {
+    var count = values.length;
+    if (count === 0) {
+        return '';
+    } else if (count === 1) {
+        return values[0];
+    } else {
+        var last = values.pop();
+        var prev = values.pop();
+        return values.join(', ') + prev + ' ' + gettext('and') + ' ' + last;
+    }
+};
+
+/**
+ * @return {boolean}
+ */
+var inArray = function (item, itemsList) {
+    for (var i = 0; i < itemsList.length; i++) {
+        if (item === itemsList[i]) {
+            return true;
+        }
+    }
+    return false;
+};
+
+var showMessage = function (element, msg, where) {
+    var div = $('<div class="vote-notification"><h3>' + msg + '</h3>(' +
+    gettext('click to close') + ')</div>');
+    where = where || 'parent';
+
+    div.click(function (event) {
+        $('.vote-notification').fadeOut('fast', function () { $(this).remove(); });
+        return false;
+    });
+
+    if (where === 'parent') {
+        element.parent().append(div);
+    } else {
+        element.after(div);
+    }
+
+    div.fadeIn('fast');
+};
+
+//outer html hack - https://github.com/brandonaaron/jquery-outerhtml/
+(function ($) {
+    var div;
+    $.fn.outerHTML = function () {
+        var elem = this[0],
+        tmp;
+        return !elem ? null
+        : typeof (tmp = elem.outerHTML) === 'string' ? tmp
+        : (div = div || $('<div/>')).html(this.eq(0).clone()).html();
+    };
+})(jQuery);
+
+/**
+ * @return {number} key code of the event or `undefined`
+ */
+var getKeyCode = function (e) {
+    if (e.which) {
+        return e.which;
+    } else if (e.keyCode) {
+        return e.keyCode;
+    }
+    return undefined;
+};
+
+var makeKeyHandler = function (key, callback) {
+    return function (e) {
+        if ((e.which && e.which === key) || (e.keyCode && e.keyCode === key)) {
+            if (!e.shiftKey) {
+                callback(e);
+                return false;
+            }
+        }
+    };
+};
+
+
+var setupButtonEventHandlers = function (button, callback) {
+    button.keydown(makeKeyHandler(13, callback));
+    button.click(callback);
+};
+
+var removeButtonEventHandlers = function (button) {
+    button.unbind('click');
+    button.unbind('keydown');
+};
+
+var decodeHtml = function (encodedText) {
+    return $('<div/>').html(encodedText).text();
+};
+
+var putCursorAtEnd = function (element) {
+    var el = $(element).get()[0];
+    var jEl = $(el);
+    if (el.setSelectionRange) {
+        var len = jEl.val().length * 2;
+        el.setSelectionRange(len, len);
+    } else {
+        jEl.val(jEl.val());
+    }
+    jEl.scrollTop(999999);
+};
+
+var setCheckBoxesIn = function (selector, value) {
+    return $(selector + '> input[type=checkbox]').attr('checked', value);
+};
+
+/*
+ * Old style notify handler
+ */
+var notify = (function () {
+    var visible = false;
+    return {
+        show: function (html, autohide) {
+            if (html) {
+                $('body').addClass('user-messages');
+                var par = $('<p class="notification"></p>');
+                par.html(html);
+                $('.notify').prepend(par);
+            }
+            $('.notify').fadeIn('slow');
+            visible = true;
+            if (autohide) {
+                setTimeout(
+                    function () {
+                        notify.close(false);
+                        notify.clear();
+                    },
+                    3000
+                );
+            }
+        },
+        clear: function () {
+            $('.notify').empty();
+        },
+        close: function (doPostback) {
+            if (doPostback) {
+                $.post(
+                    askbot.urls.mark_read_message,
+                    { formdata: 'required' }
+                );
+            }
+            $('.notify').fadeOut('fast');
+            $('body').removeClass('user-messages');
+            visible = false;
+        },
+        isVisible: function () { return visible; }
+    };
+})();
+
+/* **************************************************** */
+
+/* some google closure-like code for the ui elements */
+var inherits = function (ChildCtor, ParentCtor) {
+    /** @constructor taken from google closure */
+    function TempCtor() {}
+
+    TempCtor.prototype = ParentCtor.prototype;
+    ChildCtor.superClass_ = ParentCtor.prototype;
+    ChildCtor.prototype = new TempCtor();
+    ChildCtor.prototype.constructor = ChildCtor;
+};
+
+var getSuperClass = function (cls) {
+    return cls.superClass_;
+};
+
+        20180607202626æ  õ   #   ˙       "                         @  Û(      / * * 
+   *   a t t e n t i o n   -   t h i s   f u n c t i o n   n e e d s   t o   b e   r e t i r e d 
+   *   a s   i t   c a n n o t   a c c u r a t e l y   g i v e   u r l   t o   t h e   m e d i a   f i l e 
+   * / 
+ v a r   m e d i a U r l   =   f u n c t i o n   ( r e s o u r c e )   { 
+         r e t u r n   a s k b o t . s e t t i n g s . s t a t i c _ u r l   +   ' d e f a u l t '   +   ' / '   +   r e s o u r c e ; 
+ } ; 
+ 
+ v a r   g e t C o o k i e   =   f u n c t i o n   ( n a m e )   { 
+         v a r   c o o k i e V a l u e   =   n u l l ; 
+         i f   ( d o c u m e n t . c o o k i e   & &   d o c u m e n t . c o o k i e   ! = =   ' ' )   { 
+                 v a r   c o o k i e s   =   d o c u m e n t . c o o k i e . s p l i t ( ' ; ' ) ; 
+                 f o r   ( v a r   i   =   0 ;   i   <   c o o k i e s . l e n g t h ;   i + + )   { 
+                         v a r   c o o k i e   =   $ . t r i m ( c o o k i e s [ i ] ) ; 
+                         / /   D o e s   t h i s   c o o k i e   s t r i n g   b e g i n   w i t h   t h e   n a m e   w e   w a n t ? 
+                         i f   ( c o o k i e . s u b s t r i n g ( 0 ,   n a m e . l e n g t h   +   1 )   = = =   ( n a m e   +   ' = ' ) )   { 
+                                 r e t u r n   d e c o d e U R I C o m p o n e n t ( c o o k i e . s u b s t r i n g ( n a m e . l e n g t h   +   1 ) ) ; 
+                         } 
+                 } 
+         } 
+         r e t u r n   c o o k i e V a l u e ; 
+ } ; 
+ 
+ v a r   c s r f S a f e M e t h o d   =   f u n c t i o n ( m e t h o d )   { 
+         r e t u r n   ( / ^ ( G E T | H E A D | O P T I O N S | T R A C E ) $ / . t e s t ( m e t h o d ) ) ; 
+ } ; 
+ 
+ v a r   s a m e O r i g i n   =   f u n c t i o n ( u r l )   { 
+         v a r   h o s t   =   d o c u m e n t . l o c a t i o n . h o s t ; 
+         v a r   p r o t o c o l   =   d o c u m e n t . l o c a t i o n . p r o t o c o l ; 
+         v a r   s r _ o r i g i n   =   ' / / '   +   h o s t ; 
+         v a r   o r i g i n   =   p r o t o c o l   +   s r _ o r i g i n ; 
+         r e t u r n   ( 
+                 ( u r l   = =   o r i g i n   | |   u r l . s l i c e ( 0 ,   o r i g i n . l e n g t h   +   1 )   = =   o r i g i n   +   ' / ' )   | | 
+                 ( u r l   = =   s r _ o r i g i n   | |   u r l . s l i c e ( 0 ,   s r _ o r i g i n . l e n g t h   +   1 )   = =   s r _ o r i g i n   +   ' / ' )   | | 
+                 ! ( / ^ ( \ / \ / | h t t p : | h t t p s : ) . * / . t e s t ( u r l ) ) 
+ 
+         ) ; 
+ } ; 
+ 
+ $ . a j a x S e t u p ( { 
+         b e f o r e S e n d :   f u n c t i o n ( x h r ,   s e t t i n g s )   { 
+                 i f   ( ! c s r f S a f e M e t h o d ( s e t t i n g s . t y p e )   & &   s a m e O r i g i n ( s e t t i n g s . u r l ) )   { 
+                         / /   S e n d   t h e   t o k e n   t o   s a m e - o r i g i n ,   r e l a t i v e   U R L s   o n l y . 
+                         / /   S e n d   t h e   t o k e n   o n l y   i f   t h e   m e t h o d   w a r r a n t s   C S R F   p r o t e c t i o n 
+                         / /   U s i n g   t h e   C S R F T o k e n   v a l u e   a c q u i r e d   e a r l i e r 
+                         v a r   c s r f C o o k i e N a m e   =   a s k b o t [ ' s e t t i n g s ' ] [ ' c s r f C o o k i e N a m e ' ] ; 
+                         x h r . s e t R e q u e s t H e a d e r ( " X - C S R F T o k e n " ,   g e t C o o k i e ( c s r f C o o k i e N a m e ) ) ; 
+                 } 
+         } 
+ } ) ; 
+ 
+ 
+ / * * 
+   *   S e l e c t s   t e m p l a t e   b y   c l a s s 
+   *   t e m p l a t e   s e l e c t o r   m u s t   b e   a   s i m p l e   c l a s s   s e l e c t o r 
+   *   e . g .   . c o m m e n t 
+   * / 
+ v a r   g e t T e m p l a t e   =   f u n c t i o n   ( t e m p l a t e S e l e c t o r )   { 
+         v a r   t e m p l a t e s   =   $ ( ' . j s - t e m p l a t e s ' ) ; 
+         r e t u r n   t e m p l a t e s . f i n d ( t e m p l a t e S e l e c t o r ) . c l o n e ( f a l s e ) ; 
+ } ; 
+ 
+ v a r   c l e a n U r l   =   f u n c t i o n   ( u r l )   { 
+         v a r   r e   =   n e w   R e g E x p ( ' / / ' ,   ' g ' ) ; 
+         r e t u r n   u r l . r e p l a c e ( r e ,   ' / ' ) ; 
+ } ; 
+ 
+ v a r   c o p y A l t T o T i t l e   =   f u n c t i o n   ( s e l )   { 
+         s e l . a t t r ( ' t i t l e ' ,   s e l . a t t r ( ' a l t ' ) ) ; 
+ } ; 
+ 
+ / * * 
+   *   @ r e t u r n s   j Q u e r y   w i t h   s a m e   c o n t e n t   a n d   c l a s s e s , 
+   *   b u t   d i f f e r e n t   t a g   n a m e   ( D O M   n o d e   n a m e ) 
+   * / 
+ v a r   s e t H t m l T a g   =   f u n c t i o n   ( f r o m E l e m e n t ,   t o T a g N a m e )   { 
+         i f   ( f r o m E l e m e n t . a t t r ( ' t a g N a m e ' )   = = =   t o T a g N a m e . t o U p p e r C a s e ( ) )   { 
+                 r e t u r n   f r o m E l e m e n t ; 
+         } 
+         v a r   n e w E l e m e n t   =   $ ( ' < '   +   t o T a g N a m e   +   ' > < / '   +   t o T a g N a m e   +   ' > ' ) ; 
+         / / c o p y   c l a s s e s 
+         n e w E l e m e n t . a t t r ( ' c l a s s ' ,   f r o m E l e m e n t . a t t r ( ' c l a s s ' ) ) ; 
+         / / m o v e   c o n t e n t s 
+         f r o m E l e m e n t . c h i l d r e n ( ) . d e t a c h ( ) . a p p e n d T o ( n e w E l e m e n t ) ; 
+         / / @ t o d o :   m a y b e   c o p y   e v e n t   h a n d l e r s 
+         / / i f   e l e m e n t   i s   i n   d o m ,   i n s e r t   n e w   e l e m e n t   a n d   d e t a c h   o l d   e l e m e n t 
+         i f   ( $ ( d o c u m e n t ) . f i n d ( f r o m E l e m e n t ) )   { 
+                 f r o m E l e m e n t . a f t e r ( n e w E l e m e n t ) ; 
+                 f r o m E l e m e n t . r e m o v e ( ) ; 
+         } 
+         r e t u r n   n e w E l e m e n t ; 
+ } ; 
+ 
+ v a r   a n i m a t e H a s h e s   =   f u n c t i o n   ( )   { 
+         v a r   i d _ v a l u e   =   w i n d o w . l o c a t i o n . h a s h ; 
+         i f   ( i d _ v a l u e   ! = =   ' ' )   { 
+                 v a r   p r e v i o u s _ c o l o r   =   $ ( i d _ v a l u e ) . c s s ( ' b a c k g r o u n d - c o l o r ' ) ; 
+                 $ ( i d _ v a l u e ) . c s s ( ' b a c k g r o u n d C o l o r ' ,   ' # F F F 8 C 6 ' ) ; 
+                 $ ( i d _ v a l u e ) 
+                         . a n i m a t e ( { b a c k g r o u n d C o l o r :   ' # f f 7 f 2 a ' } ,   5 0 0 ) 
+                         . a n i m a t e ( { b a c k g r o u n d C o l o r :   ' # F F F 8 C 6 ' } ,   5 0 0 ,   f u n c t i o n   ( )   { 
+                                 $ ( i d _ v a l u e ) . c s s ( ' b a c k g r o u n d C o l o r ' ,   p r e v i o u s _ c o l o r ) ; 
+                         } ) ; 
+         } 
+ } ; 
+ 
+ v a r   a d d E x t r a C s s C l a s s e s   =   f u n c t i o n   ( e l e m e n t ,   s e t t i n g )   { 
+         i f   ( a s k b o t . c s s   & &   a s k b o t . c s s [ s e t t i n g ] )   { 
+                 e l e m e n t . a d d C l a s s ( a s k b o t . c s s [ s e t t i n g ] ) ; 
+         } 
+ } ; 
+ 
+ / * * 
+   *   @ p a r a m   { s t r i n g }   i d _ t o k e n   -   a n y   t o k e n 
+   *   @ p a r a m   { s t r i n g }   u n i q u e _ s e e d   -   t h e   u n i q u e   p a r t 
+   *   @ r e t u r n s   { s t r i n g }   u n i q u e   i d   t h a t   c a n   b e   u s e d   i n   D O M 
+   * / 
+ v a r   a s k b o t M a k e I d   =   f u n c t i o n   ( i d _ t o k e n ,   u n i q u e _ s e e d )   { 
+         r e t u r n   i d _ t o k e n   +   ' - '   +   u n i q u e _ s e e d ; 
+ } ; 
+ 
+ v a r   g e t N e w U n i q u e I n t   =   f u n c t i o n   ( )   { 
+         v a r   n u m   =   a s k b o t . d a t a . u n i q u e I n t   | |   0 ; 
+         n u m   =   n u m   +   1 ; 
+         a s k b o t . d a t a . u n i q u e I n t   =   n u m ; 
+         r e t u r n   n u m ; 
+ } ; 
+ 
+ / * * 
+   *   g e n e r i c   t a g   c l e a n i n g   f u n c t i o n ,   s e t t i n g s 
+   *   a r e   f r o m   a s k b o t   l i v e   s e t t i n g s   a n d   a s k b o t . c o n s t 
+   * / 
+ v a r   c l e a n T a g   =   f u n c t i o n   ( t a g _ n a m e ,   s e t t i n g s )   { 
+         v a r   t a g _ r e g e x   =   n e w   R e g E x p ( s e t t i n g s . t a g _ r e g e x ) ; 
+         i f   ( t a g _ r e g e x . t e s t ( t a g _ n a m e )   = = =   f a l s e )   { 
+                 v a r   f i r s t C h a r   =   t a g _ n a m e . s u b s t r i n g ( 0 ,   1 ) ; 
+                 i f   ( s e t t i n g s . t a g _ f o r b i d d e n _ f i r s t _ c h a r s . i n d e x O f ( f i r s t C h a r )   >   - 1 )   { 
+                         t h r o w   s e t t i n g s . m e s s a g e s . w r o n g _ f i r s t _ c h a r ; 
+                 }   e l s e   { 
+                         t h r o w   s e t t i n g s . m e s s a g e s . w r o n g _ c h a r s ; 
+                 } 
+         } 
+ 
+         v a r   m a x _ l e n g t h   =   s e t t i n g s . m a x _ t a g _ l e n g t h ; 
+         i f   ( t a g _ n a m e . l e n g t h   >   m a x _ l e n g t h )   { 
+                 t h r o w   i n t e r p o l a t e ( 
+                         n g e t t e x t ( 
+                                 ' m u s t   b e   s h o r t e r   t h a n   % ( m a x _ c h a r s ) s   c h a r a c t e r ' , 
+                                 ' m u s t   b e   s h o r t e r   t h a n   % ( m a x _ c h a r s ) s   c h a r a c t e r s ' , 
+                                 m a x _ l e n g t h 
+                         ) , 
+                         { ' m a x _ c h a r s ' :   m a x _ l e n g t h   } , 
+                         t r u e 
+                 ) ; 
+         } 
+         i f   ( s e t t i n g s . f o r c e _ l o w e r c a s e _ t a g s )   { 
+                 r e t u r n   t a g _ n a m e . t o L o w e r C a s e ( ) ; 
+         }   e l s e   { 
+                 r e t u r n   t a g _ n a m e ; 
+         } 
+ } ; 
+ 
+ 
+ v a r   g e t S i n g l e t o n C o n t r o l l e r   =   f u n c t i o n   ( C o n t r o l l e r C l a s s ,   n a m e )   { 
+         a s k b o t . c o n t r o l l e r s   =   a s k b o t . c o n t r o l l e r s   | |   { } ; 
+         v a r   c o n t r o l l e r   =   a s k b o t . c o n t r o l l e r s [ n a m e ] ; 
+         i f   ( c o n t r o l l e r   = = =   u n d e f i n e d )   { 
+                 c o n t r o l l e r   =   n e w   C o n t r o l l e r C l a s s ( ) ; 
+                 a s k b o t . c o n t r o l l e r s [ n a m e ]   =   c o n t r o l l e r ; 
+         } 
+         r e t u r n   c o n t r o l l e r ; 
+ } ; 
+ 
+ v a r   s e t C o n t r o l l e r   =   f u n c t i o n   ( c o n t r o l l e r ,   n a m e )   { 
+         a s k b o t . c o n t r o l l e r s   =   a s k b o t . c o n t r o l l e r s   | |   { } ; 
+         a s k b o t . c o n t r o l l e r s [ n a m e ]   =   c o n t r o l l e r ; 
+ } ; 
+ 
+ v a r   s o r t C h i l d N o d e s   =   f u n c t i o n   ( n o d e ,   c m p F u n c )   { 
+         v a r   i t e m s   =   n o d e . c h i l d r e n ( ) . s o r t ( c m p F u n c ) ; 
+         n o d e . a p p e n d ( i t e m s ) ; 
+ } ; 
+ 
+ v a r   g e t U n i q u e V a l u e s   =   f u n c t i o n   ( v a l u e s )   { 
+         v a r   u n i q u e s   =   { } ; 
+         v a r   o u t   =   [ ] ; 
+         $ . e a c h ( v a l u e s ,   f u n c t i o n   ( i d x ,   v a l u e )   { 
+                 i f   ( ! ( v a l u e   i n   u n i q u e s ) )   { 
+                         u n i q u e s [ v a l u e ]   =   1 ; 
+                         o u t . p u s h ( v a l u e ) ; 
+                 } 
+         } ) ; 
+         r e t u r n   o u t ; 
+ } ; 
+ 
+ v a r   g e t U n i q u e W o r d s   =   f u n c t i o n   ( v a l u e )   { 
+         v a r   w o r d s   =   $ . t r i m ( v a l u e ) . s p l i t ( / \ s + / ) ; 
+         r e t u r n   g e t U n i q u e V a l u e s ( w o r d s ) ; 
+ } ; 
+ 
+ / * * 
+   *   c o m m a - j o i n s   i t e m s   a n d   u s e s   " a n d ' 
+   *   b e t w e e n   t h e   l a s t   a n d   p e n u l t i m a t e   i t e m s 
+   *   @ p a r a m   { A r r a y < s t r i n g > }   v a l u e s 
+   *   @ r e t u r n   { s t r i n g } 
+   * / 
+ v a r   j o i n A s P h r a s e   =   f u n c t i o n   ( v a l u e s )   { 
+         v a r   c o u n t   =   v a l u e s . l e n g t h ; 
+         i f   ( c o u n t   = = =   0 )   { 
+                 r e t u r n   ' ' ; 
+         }   e l s e   i f   ( c o u n t   = = =   1 )   { 
+                 r e t u r n   v a l u e s [ 0 ] ; 
+         }   e l s e   { 
+                 v a r   l a s t   =   v a l u e s . p o p ( ) ; 
+                 v a r   p r e v   =   v a l u e s . p o p ( ) ; 
+                 r e t u r n   v a l u e s . j o i n ( ' ,   ' )   +   p r e v   +   '   '   +   g e t t e x t ( ' a n d ' )   +   '   '   +   l a s t ; 
+         } 
+ } ; 
+ 
+ / * * 
+   *   @ r e t u r n   { b o o l e a n } 
+   * / 
+ v a r   i n A r r a y   =   f u n c t i o n   ( i t e m ,   i t e m s L i s t )   { 
+         f o r   ( v a r   i   =   0 ;   i   <   i t e m s L i s t . l e n g t h ;   i + + )   { 
+                 i f   ( i t e m   = = =   i t e m s L i s t [ i ] )   { 
+                         r e t u r n   t r u e ; 
+                 } 
+         } 
+         r e t u r n   f a l s e ; 
+ } ; 
+ 
+ v a r   s h o w M e s s a g e   =   f u n c t i o n   ( e l e m e n t ,   m s g ,   w h e r e )   { 
+         v a r   d i v   =   $ ( ' < d i v   c l a s s = " v o t e - n o t i f i c a t i o n " > < h 3 > '   +   m s g   +   ' < / h 3 > ( '   + 
+         g e t t e x t ( ' c l i c k   t o   c l o s e ' )   +   ' ) < / d i v > ' ) ; 
+         w h e r e   =   w h e r e   | |   ' p a r e n t ' ; 
+ 
+         d i v . c l i c k ( f u n c t i o n   ( e v e n t )   { 
+                 $ ( ' . v o t e - n o t i f i c a t i o n ' ) . f a d e O u t ( ' f a s t ' ,   f u n c t i o n   ( )   {   $ ( t h i s ) . r e m o v e ( ) ;   } ) ; 
+                 r e t u r n   f a l s e ; 
+         } ) ; 
+ 
+         i f   ( w h e r e   = = =   ' p a r e n t ' )   { 
+                 e l e m e n t . p a r e n t ( ) . a p p e n d ( d i v ) ; 
+         }   e l s e   { 
+                 e l e m e n t . a f t e r ( d i v ) ; 
+         } 
+ 
+         d i v . f a d e I n ( ' f a s t ' ) ; 
+ } ; 
+ 
+ / / o u t e r   h t m l   h a c k   -   h t t p s : / / g i t h u b . c o m / b r a n d o n a a r o n / j q u e r y - o u t e r h t m l / 
+ ( f u n c t i o n   ( $ )   { 
+         v a r   d i v ; 
+         $ . f n . o u t e r H T M L   =   f u n c t i o n   ( )   { 
+                 v a r   e l e m   =   t h i s [ 0 ] , 
+                 t m p ; 
+                 r e t u r n   ! e l e m   ?   n u l l 
+                 :   t y p e o f   ( t m p   =   e l e m . o u t e r H T M L )   = = =   ' s t r i n g '   ?   t m p 
+                 :   ( d i v   =   d i v   | |   $ ( ' < d i v / > ' ) ) . h t m l ( t h i s . e q ( 0 ) . c l o n e ( ) ) . h t m l ( ) ; 
+         } ; 
+ } ) ( j Q u e r y ) ; 
+ 
+ / * * 
+   *   @ r e t u r n   { n u m b e r }   k e y   c o d e   o f   t h e   e v e n t   o r   ` u n d e f i n e d ` 
+   * / 
+ v a r   g e t K e y C o d e   =   f u n c t i o n   ( e )   { 
+         i f   ( e . w h i c h )   { 
+                 r e t u r n   e . w h i c h ; 
+         }   e l s e   i f   ( e . k e y C o d e )   { 
+                 r e t u r n   e . k e y C o d e ; 
+         } 
+         r e t u r n   u n d e f i n e d ; 
+ } ; 
+ 
+ v a r   m a k e K e y H a n d l e r   =   f u n c t i o n   ( k e y ,   c a l l b a c k )   { 
+         r e t u r n   f u n c t i o n   ( e )   { 
+                 i f   ( ( e . w h i c h   & &   e . w h i c h   = = =   k e y )   | |   ( e . k e y C o d e   & &   e . k e y C o d e   = = =   k e y ) )   { 
+                         i f   ( ! e . s h i f t K e y )   { 
+                                 c a l l b a c k ( e ) ; 
+                                 r e t u r n   f a l s e ; 
+                         } 
+                 } 
+         } ; 
+ } ; 
+ 
+ 
+ v a r   s e t u p B u t t o n E v e n t H a n d l e r s   =   f u n c t i o n   ( b u t t o n ,   c a l l b a c k )   { 
+         b u t t o n . k e y d o w n ( m a k e K e y H a n d l e r ( 1 3 ,   c a l l b a c k ) ) ; 
+         b u t t o n . c l i c k ( c a l l b a c k ) ; 
+ } ; 
+ 
+ v a r   r e m o v e B u t t o n E v e n t H a n d l e r s   =   f u n c t i o n   ( b u t t o n )   { 
+         b u t t o n . u n b i n d ( ' c l i c k ' ) ; 
+         b u t t o n . u n b i n d ( ' k e y d o w n ' ) ; 
+ } ; 
+ 
+ v a r   d e c o d e H t m l   =   f u n c t i o n   ( e n c o d e d T e x t )   { 
+         r e t u r n   $ ( ' < d i v / > ' ) . h t m l ( e n c o d e d T e x t ) . t e x t ( ) ; 
+ } ; 
+ 
+ v a r   p u t C u r s o r A t E n d   =   f u n c t i o n   ( e l e m e n t )   { 
+         v a r   e l   =   $ ( e l e m e n t ) . g e t ( ) [ 0 ] ; 
+         v a r   j E l   =   $ ( e l ) ; 
+         i f   ( e l . s e t S e l e c t i o n R a n g e )   { 
+                 v a r   l e n   =   j E l . v a l ( ) . l e n g t h   *   2 ; 
+                 e l . s e t S e l e c t i o n R a n g e ( l e n ,   l e n ) ; 
+         }   e l s e   { 
+                 j E l . v a l ( j E l . v a l ( ) ) ; 
+         } 
+         j E l . s c r o l l T o p ( 9 9 9 9 9 9 ) ; 
+ } ; 
+ 
+ v a r   s e t C h e c k B o x e s I n   =   f u n c t i o n   ( s e l e c t o r ,   v a l u e )   { 
+         r e t u r n   $ ( s e l e c t o r   +   ' >   i n p u t [ t y p e = c h e c k b o x ] ' ) . a t t r ( ' c h e c k e d ' ,   v a l u e ) ; 
+ } ; 
+ 
+ / * 
+   *   O l d   s t y l e   n o t i f y   h a n d l e r 
+   * / 
+ v a r   n o t i f y   =   ( f u n c t i o n   ( )   { 
+         v a r   v i s i b l e   =   f a l s e ; 
+         r e t u r n   { 
+                 s h o w :   f u n c t i o n   ( h t m l ,   a u t o h i d e )   { 
+                         i f   ( h t m l )   { 
+                                 $ ( ' b o d y ' ) . a d d C l a s s ( ' u s e r - m e s s a g e s ' ) ; 
+                                 v a r   p a r   =   $ ( ' < p   c l a s s = " n o t i f i c a t i o n " > < / p > ' ) ; 
+                                 p a r . h t m l ( h t m l ) ; 
+                                 $ ( ' . n o t i f y ' ) . p r e p e n d ( p a r ) ; 
+                         } 
+                         $ ( ' . n o t i f y ' ) . f a d e I n ( ' s l o w ' ) ; 
+                         v i s i b l e   =   t r u e ; 
+                         i f   ( a u t o h i d e )   { 
+                                 s e t T i m e o u t ( 
+                                         f u n c t i o n   ( )   { 
+                                                 n o t i f y . c l o s e ( f a l s e ) ; 
+                                                 n o t i f y . c l e a r ( ) ; 
+                                         } , 
+                                         3 0 0 0 
+                                 ) ; 
+                         } 
+                 } , 
+                 c l e a r :   f u n c t i o n   ( )   { 
+                         $ ( ' . n o t i f y ' ) . e m p t y ( ) ; 
+                 } , 
+                 c l o s e :   f u n c t i o n   ( d o P o s t b a c k )   { 
+                         i f   ( d o P o s t b a c k )   { 
+                                 $ . p o s t ( 
+                                         a s k b o t . u r l s . m a r k _ r e a d _ m e s s a g e , 
+                                         {   f o r m d a t a :   ' r e q u i r e d '   } 
+                                 ) ; 
+                         } 
+                         $ ( ' . n o t i f y ' ) . f a d e O u t ( ' f a s t ' ) ; 
+                         $ ( ' b o d y ' ) . r e m o v e C l a s s ( ' u s e r - m e s s a g e s ' ) ; 
+                         v i s i b l e   =   f a l s e ; 
+                 } , 
+                 i s V i s i b l e :   f u n c t i o n   ( )   {   r e t u r n   v i s i b l e ;   } 
+         } ; 
+ } ) ( ) ; 
+ 
+ / *   * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *   * / 
+ 
+ / *   s o m e   g o o g l e   c l o s u r e - l i k e   c o d e   f o r   t h e   u i   e l e m e n t s   * / 
+ v a r   i n h e r i t s   =   f u n c t i o n   ( C h i l d C t o r ,   P a r e n t C t o r )   { 
+         / * *   @ c o n s t r u c t o r   t a k e n   f r o m   g o o g l e   c l o s u r e   * / 
+         f u n c t i o n   T e m p C t o r ( )   { } 
+ 
+         T e m p C t o r . p r o t o t y p e   =   P a r e n t C t o r . p r o t o t y p e ; 
+         C h i l d C t o r . s u p e r C l a s s _   =   P a r e n t C t o r . p r o t o t y p e ; 
+         C h i l d C t o r . p r o t o t y p e   =   n e w   T e m p C t o r ( ) ; 
+         C h i l d C t o r . p r o t o t y p e . c o n s t r u c t o r   =   C h i l d C t o r ; 
+ } ; 
+ 
+ v a r   g e t S u p e r C l a s s   =   f u n c t i o n   ( c l s )   { 
+         r e t u r n   c l s . s u p e r C l a s s _ ; 
+ } ; 
+ 
+   7       https://faq.i3wm.org/m/default/media/js/utils.js%3Fv=2     Û(      Û(                    Å    Å   Å   Å   Å   Å   Å   Å   Å   Å	   Å
+   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   Å   ÷	   Ç    õ	   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Qö   ∏    
+[   Ç   ]!   Á Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç	   õ   Q÷   Ç
+   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷    Ç   õ    Q÷   Ç   õ   QÇ   ö"   Á Q÷
+   Ç   õ
+   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   õ   Q÷   Ç   :  õ   Q÷   Ç    õ   Q÷   Ç!   õ   Qô÷ˇˇßê–†	ê–†ê–†ê–†)—òê †)§;ê–†@ê–†Eê–†Mê–†_ê–†lê–†wê–†{ê–†Ä  Üê–†Ä  •ê–†Ä  Øê–†Ä  ¥ê–†Ä  πê–†Ä  ≈ê–†Ä  –ê–†Ä  ‡ê–†Ä  Èê–†Ä  ˝ê¶Ä •Ä  ˝ê§Ä ê–†Ä ê–†Ä  ê–†Ä %ê–†Ä *ê–òòòòê–†Ä :ê–†Ä AêÀê
+…†Ä lê–†Ä vê–òòòò    inArray   inherits   setHtmlTag   getUniqueValues   sameOrigin   makeKeyHandler   cleanTag   cleanUrl   getNewUniqueInt   mediaUrl   getKeyCode   setController   setCheckBoxesIn   joinAsPhrase   sortChildNodes   notify   decodeHtml1   setupButtonEventHandlers   askbotMakeId3   removeButtonEventHandlers   getTemplate   putCursorAtEnd   csrfSafeMethod   getCookie%   addExtraCssClasses   animateHashes   showMessage   copyAltToTitle   getUniqueWords   getSuperClass-   getSingletonController   $   ajaxSetup   beforeSend   jQueryá!´!ˇˇˇˇ      inArray   inherits   setHtmlTag   getUniqueValues   sameOrigin   makeKeyHandler   cleanTag   cleanUrl   getNewUniqueInt   mediaUrl   getKeyCode   setController   setCheckBoxesIn   joinAsPhrase   sortChildNodes   notify   decodeHtml1   setupButtonEventHandlers   askbotMakeId3   removeButtonEventHandlers   getTemplate   putCursorAtEnd   csrfSafeMethod   getCookie%   addExtraCssClasses   animateHashes   showMessage   copyAltToTitle   getUniqueWords   getSuperClass-   getSingletonController          ´+íHç!´!    	      mediaUrlC                                           Ä  á   Ÿ   ~   Ÿ                    ö    5   5   =   T  ôòêŸò    askbot   settings   static_url   default/å!´!ˇˇˇˇ      resource        ´+íHöò;¯       5ûç!´!          getCookieB ı   Û  Ï   Û  	      @        5ûç!´!    	      csrfSafeMethodC                                          Ä    W    W                   †    ∏    
+T  : ôòêœêõ 	   testå!´!ˇˇˇˇ      method        ´+íHå!´!5   ^(GET|HEAD|OPTIONS|TRACE)$    öò;¯       5ûç!´!          sameOriginB s    k                  5ûç!´!    	      beforeSendC s       
+                                   Ä  +  Ô  #  Ô  *                ö    ù    T 5   :  E   ÊQö   ù   T 5   : Ê>   Êö   5   5   W   QT  ∏   
+=   ö	   ù	   V   : Á QÊôòê“ê›ê!¶/ê‘òê›ê$ìˇˇˇ‹•2ê    csrfSafeMethod	   type   sameOrigin   url   askbot   settings   csrfCookieName!   setRequestHeader   X-CSRFToken   getCookieå!´!ˇˇˇˇ      xhr   settings   csrfCookieName       ´+íHöò;¯        5ûé!´!       é!´!   beforeSendã!´!    ç!´!          getTemplateB |  Ù  s  Ù  ;              5ûç!´!    	      cleanUrlC 4                                          Ä    ]    ]  @                ö    A=   =   ,  R W   QT  ∏   
+V   =   : ôòê‘ê»òê”êõ    RegExp   //   g   replace   /å!´!ˇˇˇˇ      url   re       ´+íHöò;¯       5ûç!´!    	      copyAltToTitleC &                                          Ä  ~  Ø  u  Ø  E                 T  ∏    
+=   T  ∏    
+=   : Á QôòêﬁêìˇˇˇÓú 	   attr   title   altå!´!ˇˇˇˇ      sel        ´+íHöò;¯       5ûç!´!          setHtmlTagB 0	  Ü  '	  Ü  M      0        5ûç!´!          animateHashesB  ¶  U  ù  U  _      @          id_value    previous_color   B  ı  K  Ï  K  f   A           5û 5ûç!´!       %   addExtraCssClassesB z  Ú  q  Ú  l   "            5ûç!´!          askbotMakeIdB ©  Ì  †  Ì  w              5ûç!´!          getNewUniqueIntB    É    É  {              5ûç!´!          cleanTagB   z  ˙  z  Ü      p        5ûç!´!       -   getSingletonControllerB §  Ω  õ  Ω  •   &            5ûç!´!          setControllerB ›  Q  ‘  Q  Ø              5ûç!´!          sortChildNodesB r  Ã  i  Ã  ¥              5ûç!´!          getUniqueValuesB Ó  œ  Â  œ  π      0          uniques    out   B =  ª  4  ª  º               5û 5ûç!´!          getUniqueWordsB   J  Á  J  ≈              5ûç!´!          joinAsPhraseB Ù  #  Î  #  –      @        5ûç!´!    	      inArrayC H          9                               Ä  Z     Q     ‡                >W   Q )   mT  T V   7H   ÊCÊV   #?W   QQ„ÅV   T Ÿ    ÕˇˇˇÊBôòê	ê&)8ûê°Ä  ·òÃûêôòòò¢Ä  ·ê*Œ†Ä  Â†Ä  ·ê’†Ä  Êêô    lengthå!´!ˇˇˇˇ   	   item   itemsList   i       ´+íHöò;¯       8   0       5ûç!´!          showMessageB   Ï    Ï  È      0         B ‚  [  Ÿ  [  Ó               B  %  =    =  Ô   9           5û 5û 5ûç!´!       C                                          ê $ ?  C  6  C  ˝                  Gà   5    Ç    6   Qôôêòê’†Ä     fn   outerHTMLå!´!ˇˇˇˇ      $   div       ´+íHç!´!          $.fn.outerHTMLb  p  @  g  @  ˇ              5ûöò;¯ 5ûç!´!          getKeyCodeB ™  .  °  .       0        5ûç!´!    	      makeKeyHandlerC            	                                ê   O  E  F  E                   Ç    ôòê•Ä  å!´!ˇˇˇˇ      key   callback       ´+íHç!´!       !   makeKeyHandler/<b u  B  l  B       0        5ûöò;¯ 5ûç!´!    	   1   setupButtonEventHandlersC 2                                          Ä  q  ’  h  ’     (              T  ∏    
+ö   ù   ◊T : Á QT  ∏   
+T Á QôòêŸêìˇˇˇÒúê—ò    keydown   makeKeyHandler   clickå!´!ˇˇˇˇ      button   callback        ´+íHöò;¯       5ûç!´!       3   removeButtonEventHandlersB    G   ¯  G   %  )           5ûç!´!          decodeHtmlB d   ¶   [   ¶   *             5ûç!´!    	      putCursorAtEndC ∞          0                                Ä  «   ≈!  æ   ≈!  .               ö    ù    T  : ∏   
+:  >7W   Qö    ù    V   : W  QV   5   =   ÊV  ∏   
+:  Ÿ   ◊W  QV   ∏   
+V  V  Á Q#   ÊV  ∏   
+V  ∏   
+:  Á QÊV  ∏   
+º?BÁ QôòêÕê‘òêŒê»ò…8ûêÀê–òê›òòê÷êìˇˇˇ¯ùòê”ò    $   get#   setSelectionRange   val   length   scrollTopå!´!ˇˇˇˇ      element   el   jEl   len       ´+íHöò;¯0       5ûç!´!          setCheckBoxesInB Á!  F"  ﬁ!  F"  :             5ûç!´!    	      notify<c   7         #                                 Ä $ É"  Ù&  z"  Ù&  A                 GBâ   Q[   Ç    ]    Ç   ]   Ç   ]   Ç   ]   ôôêüêùê †Ä Wê òòòê †Ä eê òò 	   show   clear   close   isVisibleå!´!ˇˇˇˇ      visible         ´+íHç!´!       	   showB ≈"  	%  º"  	%  D     0         B  U$  ƒ$  L$  ƒ$  O             5û 5ûç!´!          clearB  #%  S%  %  S%  W             5ûç!´!          closeB m%  ∑&  d%  ∑&  Z              5ûç!´!          isVisibleB  ’&  Î&  Ã&  Î&  e             5ûé!´!       é!´!	   showã!´!é!´!   clearã!´!é!´!   closeã!´!é!´!   isVisibleã!´!    öò;¯ 5ûç!´!    	      inheritsC T                                         Ä   Ü'  ´(  }'  ´(  l                Ç    W   QV   T 5    6    QT  T 5    6   QT  V   A,  R  6    QT  5    T  6   Qô òòòòê“òê—òêÃê…òê—ò    prototype   superClass_   constructorå!´!ˇˇˇˇ      ChildCtor   ParentCtor   TempCtor       ´+íHç!´!          TempCtor                                                Ä  Á'  Ï'  ÷'  Ï'  n                 ôê å!´!ˇˇˇˇ              ´+íHöò;¯        5ûöò;¯ 5ûç!´!          getSuperClassB À(  (  ¬(  (  v             5ûöò;¯%·MõÕ/      [*&Ò[*&Ú?2e[*'=   7    :https://faq.i3wm.org/m/default/media/js/utils.js%3Fv=2 necko:classified 1 strongly-framed 1 security-info FnhllAKWRHGAlo+ESXykKAAAAAAAAAAAwAAAAAAAAEaphjojH6pBabDSgSnsfLHeAAQAAgAAAAAAAAAAAAAAAAAAAAAB4vFIJp5wRkeyPxAQ9RJGKPqbqVvKO0mKuIl8ec8o/uhmCjImkVxP+7sgiYWmMt8FvcOXmlQiTNWFiWlrbpbqgwAAAAAAAAoyMIIKLjCCCdSgAwIBAgIQPXLliLm882kZCaE1O2AJQTAKBggqhkjOPQQDAjCBkjELMAkGA1UEBhMCR0IxGzAZBgNVBAgTEkdyZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBxMHU2FsZm9yZDEaMBgGA1UEChMRQ09NT0RPIENBIExpbWl0ZWQxODA2BgNVBAMTL0NPTU9ETyBFQ0MgRG9tYWluIFZhbGlkYXRpb24gU2VjdXJlIFNlcnZlciBDQSAyMB4XDTE4MDYxODAwMDAwMFoXDTE4MTIyNTIzNTk1OVowazEhMB8GA1UECxMYRG9tYWluIENvbnRyb2wgVmFsaWRhdGVkMSEwHwYDVQQLExhQb3NpdGl2ZVNTTCBNdWx0aS1Eb21haW4xIzAhBgNVBAMTGnNuaTM3NTM5LmNsb3VkZmxhcmVzc2wuY29tMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE85/PEWijoj1UwV8dc2plaLU2Q94jh5XJyL7n86thOXVHJrf6I7Lin0f1gxqfxQTXlvIQ8UjAyx8CTcAC4LC3RqOCCDAwgggsMB8GA1UdIwQYMBaAFEAJYWfwvINxT94SCCxv1NQrdj2WMB0GA1UdDgQWBBQMSCk8MNsWyag4Jn6C3/a29fX7/TAOBgNVHQ8BAf8EBAMCB4AwDAYDVR0TAQH/BAIwADAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwTwYDVR0gBEgwRjA6BgsrBgEEAbIxAQICBzArMCkGCCsGAQUFBwIBFh1odHRwczovL3NlY3VyZS5jb21vZG8uY29tL0NQUzAIBgZngQwBAgEwVgYDVR0fBE8wTTBLoEmgR4ZFaHR0cDovL2NybC5jb21vZG9jYTQuY29tL0NPTU9ET0VDQ0RvbWFpblZhbGlkYXRpb25TZWN1cmVTZXJ2ZXJDQTIuY3JsMIGIBggrBgEFBQcBAQR8MHowUQYIKwYBBQUHMAKGRWh0dHA6Ly9jcnQuY29tb2RvY2E0LmNvbS9DT01PRE9FQ0NEb21haW5WYWxpZGF0aW9uU2VjdXJlU2VydmVyQ0EyLmNydDAlBggrBgEFBQcwAYYZaHR0cDovL29jc3AuY29tb2RvY2E0LmNvbTCCBW8GA1UdEQSCBWYwggVighpzbmkzNzUzOS5jbG91ZGZsYXJlc3NsLmNvbYISKi4xcGF0dGVybmhvbWUwLmdhgg8qLjU5ZGVza3RvcDIuZ3GCDyouNmRlc2lnbmhkMS5jZoISKi5hbGVydG9waW5pb24uY29tgiAqLmJjYXJkLXNlY3VyZS1sZGVudHZlcmZhaHJlbi5ydYINKi5ib2JvbHRzLmNvbYIUKi5jaGVhcHNhbmRpc2trcWQuZ2GCGSouY29tZXRvZ2V0aGVyYm93bmVzcy5jb22CFSouZGVza3RvcHdhbGw4d2FsbC5nYYIMKi5maHZpcHMuY29tgg4qLmZvanRva2xvay50a4IPKi5mcmVnYXQtc3BiLnJ1ggwqLmZyaXNvbnMuZnKCCiouZ292bm8ubWyCCiouaHJ5MjQuc2uCCiouaTN3bS5vcmeCDiouamN2YWVib29rLm1sgg4qLmtvdm50aWtpcy5jZoIUKi5sZXF1YXJ0aWVybGF0aW4uZnKCHCoubWFtbXV0bW91bnRhaW5zY2hvb2wuY28udWuCDioubW9iaWxlMzE1LmNmghEqLm1vdmllc2hlbHBlci5tbIIQKi5wYXR0ZXJuaGQ1Ni5nYYIbKi5wY2tleW5vdGlmaWNhdGlvbnMucmV2aWV3ggwqLnJpY2Zvc3MuZ3GCDyoucm9idXN0aXJjLm5ldIIXKi5zZWxmYnVpbGRuZXdob21lcy5jb22CEyouc3BtaW5zdHJ1bWVmbnQuZ3GCDSouc3V0YXplMjQuc2uCECoudG9tYm9ib2x0cy5jb22CDioudHJlbmRpZnkuY29tghIqLndhbHkta3Jhd2N6eWsucGyCECoud2hlaGVsYmFzZXMuZ2GCGyoud2luZG93c25vdy5hbHRlcnZpc3RhLm9yZ4IMKi54MTF2aXMub3JnghAqLnh4eHZvdGUucmV2aWV3gg4qLnphYmF2dm5lcy50a4IMKi56ZWtqdXIubmV0ghAxcGF0dGVybmhvbWUwLmdhgg01OWRlc2t0b3AyLmdxgg02ZGVzaWduaGQxLmNmghBhbGVydG9waW5pb24uY29tgh5iY2FyZC1zZWN1cmUtbGRlbnR2ZXJmYWhyZW4ucnWCC2JvYm9sdHMuY29tghJjaGVhcHNhbmRpc2trcWQuZ2GCF2NvbWV0b2dldGhlcmJvd25lc3MuY29tghNkZXNrdG9wd2FsbDh3YWxsLmdhggpmaHZpcHMuY29tggxmb2p0b2tsb2sudGuCDWZyZWdhdC1zcGIucnWCCmZyaXNvbnMuZnKCCGdvdm5vLm1sgghocnkyNC5za4IIaTN3bS5vcmeCDGpjdmFlYm9vay5tbIIMa292bnRpa2lzLmNmghJsZXF1YXJ0aWVybGF0aW4uZnKCGm1hbW11dG1vdW50YWluc2Nob29sLmNvLnVrggxtb2JpbGUzMTUuY2aCD21vdmllc2hlbHBlci5tbIIOcGF0dGVybmhkNTYuZ2GCGXBja2V5bm90aWZpY2F0aW9ucy5yZXZpZXeCCnJpY2Zvc3MuZ3GCDXJvYnVzdGlyYy5uZXSCFXNlbGZidWlsZG5ld2hvbWVzLmNvbYIRc3BtaW5zdHJ1bWVmbnQuZ3GCC3N1dGF6ZTI0LnNrgg50b21ib2JvbHRzLmNvbYIMdHJlbmRpZnkuY29tghB3YWx5LWtyYXdjenlrLnBsgg53aGVoZWxiYXNlcy5nYYIZd2luZG93c25vdy5hbHRlcnZpc3RhLm9yZ4IKeDExdmlzLm9yZ4IOeHh4dm90ZS5yZXZpZXeCDHphYmF2dm5lcy50a4IKemVranVyLm5ldDCCAQQGCisGAQQB1nkCBAIEgfUEgfIA8AB2AO5Lvbd1zmC64UJpH6vhnmajD35fsHLYgwDEe4l6qP3LAAABZBCprdMAAAQDAEcwRQIgIgozFgA49lPG0PTy86Gd/wuc3BOrr4+AFhLaI1INoscCIQCSdmTrrQGI2hjPPDxQeumP9FMB3vXdcMygJ7oZs8bEmQB2ANt0r+7LKeyx/so+cW0s5bmquzb3hHGDx12dTze2H79kAAABZBCprhEAAAQDAEcwRQIgRwAp0+HPf1ToWJOs12X8gDriAWDJgrWG+nDh8oBloxICIQC93XqUG41zYtM8a78fbxa8OImGK84WgyY3Xe+J89zA/TAKBggqhkjOPQQDAgNIADBFAiEAq+a7c5+0UydAQ3cOE8CWxz6yaKiF5AUBV5yKQY11SHoCIFq2GIYE+SKsAf129MqI3f5ipQLnUuqgN/VnAHydFnUiEwEDBAAAAAABAQAAAAAAAAZ4MjU1MTkAAAARRUNEU0EtUDI1Ni1TSEEyNTYBlZ+xZWUXSH+rm9iRO+Uxl650zaXNL0c/lvXwt//2LGgAAAADZgoyJpFcT/u7IImFpjLfBb3Dl5pUIkzVhYlpa26W6oMAAAAAAAAKMjCCCi4wggnUoAMCAQICED1y5Yi5vPNpGQmhNTtgCUEwCgYIKoZIzj0EAwIwgZIxCzAJBgNVBAYTAkdCMRswGQYDVQQIExJHcmVhdGVyIE1hbmNoZXN0ZXIxEDAOBgNVBAcTB1NhbGZvcmQxGjAYBgNVBAoTEUNPTU9ETyBDQSBMaW1pdGVkMTgwNgYDVQQDEy9DT01PRE8gRUNDIERvbWFpbiBWYWxpZGF0aW9uIFNlY3VyZSBTZXJ2ZXIgQ0EgMjAeFw0xODA2MTgwMDAwMDBaFw0xODEyMjUyMzU5NTlaMGsxITAfBgNVBAsTGERvbWFpbiBDb250cm9sIFZhbGlkYXRlZDEhMB8GA1UECxMYUG9zaXRpdmVTU0wgTXVsdGktRG9tYWluMSMwIQYDVQQDExpzbmkzNzUzOS5jbG91ZGZsYXJlc3NsLmNvbTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABPOfzxFoo6I9VMFfHXNqZWi1NkPeI4eVyci+5/OrYTl1Rya3+iOy4p9H9YMan8UE15byEPFIwMsfAk3AAuCwt0ajgggwMIIILDAfBgNVHSMEGDAWgBRACWFn8LyDcU/eEggsb9TUK3Y9ljAdBgNVHQ4EFgQUDEgpPDDbFsmoOCZ+gt/2tvX1+/0wDgYDVR0PAQH/BAQDAgeAMAwGA1UdEwEB/wQCMAAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCME8GA1UdIARIMEYwOgYLKwYBBAGyMQECAgcwKzApBggrBgEFBQcCARYdaHR0cHM6Ly9zZWN1cmUuY29tb2RvLmNvbS9DUFMwCAYGZ4EMAQIBMFYGA1UdHwRPME0wS6BJoEeGRWh0dHA6Ly9jcmwuY29tb2RvY2E0LmNvbS9DT01PRE9FQ0NEb21haW5WYWxpZGF0aW9uU2VjdXJlU2VydmVyQ0EyLmNybDCBiAYIKwYBBQUHAQEEfDB6MFEGCCsGAQUFBzAChkVodHRwOi8vY3J0LmNvbW9kb2NhNC5jb20vQ09NT0RPRUNDRG9tYWluVmFsaWRhdGlvblNlY3VyZVNlcnZlckNBMi5jcnQwJQYIKwYBBQUHMAGGGWh0dHA6Ly9vY3NwLmNvbW9kb2NhNC5jb20wggVvBgNVHREEggVmMIIFYoIac25pMzc1MzkuY2xvdWRmbGFyZXNzbC5jb22CEiouMXBhdHRlcm5ob21lMC5nYYIPKi41OWRlc2t0b3AyLmdxgg8qLjZkZXNpZ25oZDEuY2aCEiouYWxlcnRvcGluaW9uLmNvbYIgKi5iY2FyZC1zZWN1cmUtbGRlbnR2ZXJmYWhyZW4ucnWCDSouYm9ib2x0cy5jb22CFCouY2hlYXBzYW5kaXNra3FkLmdhghkqLmNvbWV0b2dldGhlcmJvd25lc3MuY29tghUqLmRlc2t0b3B3YWxsOHdhbGwuZ2GCDCouZmh2aXBzLmNvbYIOKi5mb2p0b2tsb2sudGuCDyouZnJlZ2F0LXNwYi5ydYIMKi5mcmlzb25zLmZyggoqLmdvdm5vLm1sggoqLmhyeTI0LnNrggoqLmkzd20ub3Jngg4qLmpjdmFlYm9vay5tbIIOKi5rb3ZudGlraXMuY2aCFCoubGVxdWFydGllcmxhdGluLmZyghwqLm1hbW11dG1vdW50YWluc2Nob29sLmNvLnVrgg4qLm1vYmlsZTMxNS5jZoIRKi5tb3ZpZXNoZWxwZXIubWyCECoucGF0dGVybmhkNTYuZ2GCGyoucGNrZXlub3RpZmljYXRpb25zLnJldmlld4IMKi5yaWNmb3NzLmdxgg8qLnJvYnVzdGlyYy5uZXSCFyouc2VsZmJ1aWxkbmV3aG9tZXMuY29tghMqLnNwbWluc3RydW1lZm50Lmdxgg0qLnN1dGF6ZTI0LnNrghAqLnRvbWJvYm9sdHMuY29tgg4qLnRyZW5kaWZ5LmNvbYISKi53YWx5LWtyYXdjenlrLnBsghAqLndoZWhlbGJhc2VzLmdhghsqLndpbmRvd3Nub3cuYWx0ZXJ2aXN0YS5vcmeCDCoueDExdmlzLm9yZ4IQKi54eHh2b3RlLnJldmlld4IOKi56YWJhdnZuZXMudGuCDCouemVranVyLm5ldIIQMXBhdHRlcm5ob21lMC5nYYINNTlkZXNrdG9wMi5ncYINNmRlc2lnbmhkMS5jZoIQYWxlcnRvcGluaW9uLmNvbYIeYmNhcmQtc2VjdXJlLWxkZW50dmVyZmFocmVuLnJ1ggtib2JvbHRzLmNvbYISY2hlYXBzYW5kaXNra3FkLmdhghdjb21ldG9nZXRoZXJib3duZXNzLmNvbYITZGVza3RvcHdhbGw4d2FsbC5nYYIKZmh2aXBzLmNvbYIMZm9qdG9rbG9rLnRrgg1mcmVnYXQtc3BiLnJ1ggpmcmlzb25zLmZygghnb3Zuby5tbIIIaHJ5MjQuc2uCCGkzd20ub3JnggxqY3ZhZWJvb2subWyCDGtvdm50aWtpcy5jZoISbGVxdWFydGllcmxhdGluLmZyghptYW1tdXRtb3VudGFpbnNjaG9vbC5jby51a4IMbW9iaWxlMzE1LmNmgg9tb3ZpZXNoZWxwZXIubWyCDnBhdHRlcm5oZDU2LmdhghlwY2tleW5vdGlmaWNhdGlvbnMucmV2aWV3ggpyaWNmb3NzLmdxgg1yb2J1c3RpcmMubmV0ghVzZWxmYnVpbGRuZXdob21lcy5jb22CEXNwbWluc3RydW1lZm50LmdxggtzdXRhemUyNC5za4IOdG9tYm9ib2x0cy5jb22CDHRyZW5kaWZ5LmNvbYIQd2FseS1rcmF3Y3p5ay5wbIIOd2hlaGVsYmFzZXMuZ2GCGXdpbmRvd3Nub3cuYWx0ZXJ2aXN0YS5vcmeCCngxMXZpcy5vcmeCDnh4eHZvdGUucmV2aWV3ggx6YWJhdnZuZXMudGuCCnpla2p1ci5uZXQwggEEBgorBgEEAdZ5AgQCBIH1BIHyAPAAdgDuS723dc5guuFCaR+r4Z5mow9+X7By2IMAxHuJeqj9ywAAAWQQqa3TAAAEAwBHMEUCICIKMxYAOPZTxtD08vOhnf8LnNwTq6+PgBYS2iNSDaLHAiEAknZk660BiNoYzzw8UHrpj/RTAd713XDMoCe6GbPGxJkAdgDbdK/uyynssf7KPnFtLOW5qrs294Rxg8ddnU83th+/ZAAAAWQQqa4RAAAEAwBHMEUCIEcAKdPhz39U6FiTrNdl/IA64gFgyYK1hvpw4fKAZaMSAiEAvd16lBuNc2LTPGu/H28WvDiJhivOFoMmN13vifPcwP0wCgYI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 request-method GET request-Accept-Encoding gzip, deflate, br response-head HTTP/2.0 200 OK
+content-type: application/octet-stream
+content-length: 10483
+last-modified: Mon, 21 Dec 2015 08:00:44 GMT
+access-control-allow-origin: *
+x-github-request-id: 1B4A:23F0:3258681:43A7BA3:5B291797
+accept-ranges: bytes
+date: Wed, 20 Jun 2018 10:05:05 GMT
+via: 1.1 varnish
+cache-control: max-age=600
+expires: Tue, 19 Jun 2018 14:57:51 GMT
+age: 493
+x-served-by: cache-bma1635-BMA
+x-cache: HIT
+x-cache-hits: 1
+x-timer: S1529489105.216211,VS0,VE1
+vary: Accept-Encoding
+x-fastly-request-id: 7da66dc83e72f6c633ceeb85067cefe1b9eff654
+expect-ct: max-age=604800, report-uri="https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct"
+server: cloudflare
+cf-ray: 42dd6a3b9c253cd1-CPH
+X-Firefox-Spdy: h2
+ original-response-headers date: Tue, 19 Jun 2018 21:33:11 GMT
+content-type: application/octet-stream
+content-length: 10483
+last-modified: Mon, 21 Dec 2015 08:00:44 GMT
+access-control-allow-origin: *
+expires: Tue, 19 Jun 2018 14:57:51 GMT
+cache-control: max-age=600
+x-github-request-id: 1B4A:23F0:3258681:43A7BA3:5B291797
+accept-ranges: bytes
+via: 1.1 varnish
+age: 0
+x-served-by: cache-bma1622-BMA
+x-cache: HIT
+x-cache-hits: 1
+x-timer: S1529443992.766581,VS0,VE110
+vary: Accept-Encoding
+x-fastly-request-id: c020a8d76ee1919ae99153825d6d84dc31b42a23
+expect-ct: max-age=604800, report-uri="https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct"
+server: cloudflare
+cf-ray: 42d91cd47f873cad-CPH
+X-Firefox-Spdy: h2
+ net-response-time-onstart 140 net-response-time-onstop 142 alt-data 1;10483,javascript/moz-bytecode-20180607202626 alt-data-from-child 1   õ«

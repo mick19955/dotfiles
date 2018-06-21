@@ -1,0 +1,28 @@
+{
+    "wallpaper": "/home/mick19955/Downloads/Wallpaper.jpg",
+    "alpha": "100",
+
+    "special": {
+        "background": "#1c1519",
+        "foreground": "#80e0e0",
+        "cursor": "#80e0e0"
+    },
+    "colors": {
+        "color0": "#1c1519",
+        "color1": "#504E4F",
+        "color2": "#5C605E",
+        "color3": "#874235",
+        "color4": "#1C9C9E",
+        "color5": "#4F9295",
+        "color6": "#449F9F",
+        "color7": "#80e0e0",
+        "color8": "#599c9c",
+        "color9": "#504E4F",
+        "color10": "#5C605E",
+        "color11": "#874235",
+        "color12": "#1C9C9E",
+        "color13": "#4F9295",
+        "color14": "#449F9F",
+        "color15": "#80e0e0"
+    }
+}

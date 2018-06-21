@@ -1,0 +1,603 @@
+/**
+ * @constructor
+ */
+var FileUploadDialog = function () {
+    ModalDialog.call(this);
+    this._className = 'file-upload-dialog';
+    this._post_upload_handler = undefined;
+    this._fileType = 'image';
+    this._headerEnabled = false;
+};
+inherits(FileUploadDialog, ModalDialog);
+
+/**
+ * allowed values: 'image', 'attachment'
+ */
+FileUploadDialog.prototype.setFileType = function (fileType) {
+    this._fileType = fileType;
+};
+
+FileUploadDialog.prototype.getFileType = function () {
+    return this._fileType;
+};
+
+FileUploadDialog.prototype.setButtonText = function (text) {
+    this._fakeInput.val(text);
+};
+
+FileUploadDialog.prototype.setPostUploadHandler = function (handler) {
+    this._post_upload_handler = handler;
+};
+
+FileUploadDialog.prototype.runPostUploadHandler = function (url, descr) {
+    this._post_upload_handler(url, descr);
+};
+
+FileUploadDialog.prototype.setInputId = function (id) {
+    this._input_id = id;
+};
+
+FileUploadDialog.prototype.getInputId = function () {
+    return this._input_id;
+};
+
+FileUploadDialog.prototype.setErrorText = function (text) {
+    this.setLabelText(text);
+    this._label.addClass('error');
+};
+
+FileUploadDialog.prototype.setLabelText = function (text) {
+    this._label.html(text);
+    this._label.removeClass('error');
+};
+
+FileUploadDialog.prototype.setUrlInputTooltip = function (text) {
+    this._url_input_tooltip = text;
+};
+
+FileUploadDialog.prototype.getUrl = function () {
+    var url_input = this._url_input;
+    if (url_input.isBlank() === false) {
+        return url_input.getVal();
+    }
+    return '';
+};
+
+//disable description for now
+//FileUploadDialog.prototype.getDescription = function () {
+//    return this._description_input.getVal();
+//};
+
+FileUploadDialog.prototype.resetInputs = function () {
+    this._url_input.reset();
+    //this._description_input.reset();
+    this._upload_input.val('');
+};
+
+FileUploadDialog.prototype.getInputElement = function () {
+    return $('#' + this.getInputId());
+};
+
+FileUploadDialog.prototype.installFileUploadHandler = function (handler) {
+    var upload_input = this.getInputElement();
+    upload_input.unbind('change');
+    //todo: fix this - make event handler reinstall work
+    upload_input.change(handler);
+};
+
+FileUploadDialog.prototype.show = function () {
+    //hack around the ajaxFileUpload plugin
+    FileUploadDialog.superClass_.show.call(this);
+    var handler = this.getStartUploadHandler();
+    this.installFileUploadHandler(handler);
+};
+
+FileUploadDialog.prototype.getUrlInputElement = function () {
+    return this._url_input.getElement();
+};
+
+/*
+ * argument startUploadHandler is very special it must
+ * be a function calling this one!!! Todo: see if there
+ * is a more civilized way to do this.
+ */
+FileUploadDialog.prototype.startFileUpload = function (startUploadHandler) {
+
+    var spinner = this._spinner;
+    var label = this._label;
+
+    spinner.ajaxStart(function () {
+        spinner.show();
+        label.hide();
+    });
+    spinner.ajaxComplete(function () {
+        spinner.hide();
+        label.show();
+    });
+
+    /* important!!! upload input must be loaded by id
+     * because ajaxFileUpload monkey-patches the upload form */
+    var uploadInput = this.getInputElement();
+    uploadInput.ajaxStart(function () { uploadInput.hide(); });
+    uploadInput.ajaxComplete(function () { uploadInput.show(); });
+
+    //var localFilePath = upload_input.val();
+
+    var me = this;
+
+    $.ajaxFileUpload({
+        url: askbot.urls.upload,
+        secureuri: false,//todo: check on https
+        fileElementId: this.getInputId(),
+        dataType: 'xml',
+        success: function (data, status) {
+
+            var fileURL = $(data).find('file_url').text();
+            var origFileName = $(data).find('orig_file_name').text();
+            var newStatus = interpolate(
+                                gettext('Uploaded file: %s'),
+                                [origFileName]
+                            );
+            /*
+            * hopefully a fix for the "fakepath" issue
+            * https://www.mediawiki.org/wiki/Special:Code/MediaWiki/83225
+            */
+            fileURL = fileURL.replace(/\w:.*\\(.*)$/, '$1');
+            var error = $(data).find('error').text();
+            if (error !== '') {
+                me.setErrorText(error);
+            } else {
+                me.getUrlInputElement().attr('value', fileURL);
+                me.setLabelText(newStatus);
+                var buttonText = gettext('Choose a different file');
+                if (me.getFileType() === 'image') {
+                    buttonText = gettext('Choose a different image');
+                }
+                me.setButtonText(buttonText);
+            }
+
+            /* re-install this as the upload extension
+             * will remove the handler to prevent double uploading
+             * this hack is a manipulation around the
+             * ajaxFileUpload jQuery plugin. */
+            me.installFileUploadHandler(startUploadHandler);
+        },
+        error: function (data, status, e) {
+            /* re-install this as the upload extension
+            * will remove the handler to prevent double uploading */
+            me.setErrorText(gettext('Oops, looks like we had an error. Sorry.'));
+            me.installFileUploadHandler(startUploadHandler);
+        }
+    });
+    return false;
+};
+
+FileUploadDialog.prototype.getStartUploadHandler = function () {
+    var me = this;
+    var handler = function () {
+        /* the trick is that we need inside the function call
+         * to have a reference to itself
+         * in order to reinstall the handler later
+         * because ajaxFileUpload jquery extension might be destroying it */
+        return me.startFileUpload(handler);
+    };
+    return handler;
+};
+
+FileUploadDialog.prototype.createDom = function () {
+
+    var superClass = FileUploadDialog.superClass_;
+
+    var me = this;
+    superClass.setAcceptHandler.call(this, function () {
+        var url = $.trim(me.getUrl());
+        //var description = me.getDescription();
+        //@todo: have url cleaning code here
+        if (url.length > 0) {
+            me.runPostUploadHandler(url);//, description);
+            me.resetInputs();
+        }
+        me.hide();
+    });
+    superClass.setRejectHandler.call(this, function () {
+        me.resetInputs();
+        me.hide();
+    });
+    superClass.createDom.call(this);
+
+    var form = this.makeElement('form');
+    form.addClass('ajax-file-upload');
+    form.css('margin-bottom', 0);
+    this.prependContent(form);
+
+    // Browser native file upload field
+    var upload_input = this.makeElement('input');
+    upload_input.attr({
+        id: this._input_id,
+        type: 'file',
+        name: 'file-upload'
+        //size: 26???
+    });
+    form.append(upload_input);
+    this._upload_input = upload_input;
+
+    var fakeInput = this.makeElement('input');
+    fakeInput.attr('type', 'button');
+    fakeInput.addClass('submit');
+    fakeInput.addClass('fake-file-input');
+    var buttonText = gettext('Choose a file to insert');
+    if (this._fileType === 'image') {
+        buttonText = gettext('Choose an image to insert');
+    }
+    fakeInput.val(buttonText);
+    this._fakeInput = fakeInput;
+    form.append(fakeInput);
+
+    setupButtonEventHandlers(fakeInput, function () { upload_input.click(); });
+
+    // Label which will also serve as status display
+    var label = this.makeElement('label');
+    label.attr('for', this._input_id);
+    var types = askbot.settings.allowedUploadFileTypes;
+    types = types.join(', ');
+    label.html(gettext('Allowed file types are:') + ' ' + types + '.');
+    form.append(label);
+    this._label = label;
+
+    // The url input text box, probably unused in fact
+    var url_input = new TippedInput();
+    url_input.setInstruction(this._url_input_tooltip || gettext('Or paste file url here'));
+    var url_input_element = url_input.getElement();
+    url_input_element.css({
+        'width': '200px',
+        'display': 'none'
+    });
+    form.append(url_input_element);
+    //form.append($('<br/>'));
+    this._url_input = url_input;
+
+    /* //Description input box
+    var descr_input = new TippedInput();
+    descr_input.setInstruction(gettext('Describe the image here'));
+    this.makeElement('input');
+    form.append(descr_input.getElement());
+    form.append($('<br/>'));
+    this._description_input = descr_input;
+    */
+    var spinner = this.makeElement('img');
+    spinner.attr('src', mediaUrl('media/images/ajax-loader.gif'));
+    spinner.css('display', 'none');
+    spinner.addClass('spinner');
+    form.append(spinner);
+    this._spinner = spinner;
+
+    upload_input.change(this.getStartUploadHandler());
+};
+        20180607202626Ω        M                         *       @  €!      / * * 
+   *   @ c o n s t r u c t o r 
+   * / 
+ v a r   F i l e U p l o a d D i a l o g   =   f u n c t i o n   ( )   { 
+         M o d a l D i a l o g . c a l l ( t h i s ) ; 
+         t h i s . _ c l a s s N a m e   =   ' f i l e - u p l o a d - d i a l o g ' ; 
+         t h i s . _ p o s t _ u p l o a d _ h a n d l e r   =   u n d e f i n e d ; 
+         t h i s . _ f i l e T y p e   =   ' i m a g e ' ; 
+         t h i s . _ h e a d e r E n a b l e d   =   f a l s e ; 
+ } ; 
+ i n h e r i t s ( F i l e U p l o a d D i a l o g ,   M o d a l D i a l o g ) ; 
+ 
+ / * * 
+   *   a l l o w e d   v a l u e s :   ' i m a g e ' ,   ' a t t a c h m e n t ' 
+   * / 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . s e t F i l e T y p e   =   f u n c t i o n   ( f i l e T y p e )   { 
+         t h i s . _ f i l e T y p e   =   f i l e T y p e ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . g e t F i l e T y p e   =   f u n c t i o n   ( )   { 
+         r e t u r n   t h i s . _ f i l e T y p e ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . s e t B u t t o n T e x t   =   f u n c t i o n   ( t e x t )   { 
+         t h i s . _ f a k e I n p u t . v a l ( t e x t ) ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . s e t P o s t U p l o a d H a n d l e r   =   f u n c t i o n   ( h a n d l e r )   { 
+         t h i s . _ p o s t _ u p l o a d _ h a n d l e r   =   h a n d l e r ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . r u n P o s t U p l o a d H a n d l e r   =   f u n c t i o n   ( u r l ,   d e s c r )   { 
+         t h i s . _ p o s t _ u p l o a d _ h a n d l e r ( u r l ,   d e s c r ) ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . s e t I n p u t I d   =   f u n c t i o n   ( i d )   { 
+         t h i s . _ i n p u t _ i d   =   i d ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . g e t I n p u t I d   =   f u n c t i o n   ( )   { 
+         r e t u r n   t h i s . _ i n p u t _ i d ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . s e t E r r o r T e x t   =   f u n c t i o n   ( t e x t )   { 
+         t h i s . s e t L a b e l T e x t ( t e x t ) ; 
+         t h i s . _ l a b e l . a d d C l a s s ( ' e r r o r ' ) ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . s e t L a b e l T e x t   =   f u n c t i o n   ( t e x t )   { 
+         t h i s . _ l a b e l . h t m l ( t e x t ) ; 
+         t h i s . _ l a b e l . r e m o v e C l a s s ( ' e r r o r ' ) ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . s e t U r l I n p u t T o o l t i p   =   f u n c t i o n   ( t e x t )   { 
+         t h i s . _ u r l _ i n p u t _ t o o l t i p   =   t e x t ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . g e t U r l   =   f u n c t i o n   ( )   { 
+         v a r   u r l _ i n p u t   =   t h i s . _ u r l _ i n p u t ; 
+         i f   ( u r l _ i n p u t . i s B l a n k ( )   = = =   f a l s e )   { 
+                 r e t u r n   u r l _ i n p u t . g e t V a l ( ) ; 
+         } 
+         r e t u r n   ' ' ; 
+ } ; 
+ 
+ / / d i s a b l e   d e s c r i p t i o n   f o r   n o w 
+ / / F i l e U p l o a d D i a l o g . p r o t o t y p e . g e t D e s c r i p t i o n   =   f u n c t i o n   ( )   { 
+ / /         r e t u r n   t h i s . _ d e s c r i p t i o n _ i n p u t . g e t V a l ( ) ; 
+ / / } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . r e s e t I n p u t s   =   f u n c t i o n   ( )   { 
+         t h i s . _ u r l _ i n p u t . r e s e t ( ) ; 
+         / / t h i s . _ d e s c r i p t i o n _ i n p u t . r e s e t ( ) ; 
+         t h i s . _ u p l o a d _ i n p u t . v a l ( ' ' ) ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . g e t I n p u t E l e m e n t   =   f u n c t i o n   ( )   { 
+         r e t u r n   $ ( ' # '   +   t h i s . g e t I n p u t I d ( ) ) ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . i n s t a l l F i l e U p l o a d H a n d l e r   =   f u n c t i o n   ( h a n d l e r )   { 
+         v a r   u p l o a d _ i n p u t   =   t h i s . g e t I n p u t E l e m e n t ( ) ; 
+         u p l o a d _ i n p u t . u n b i n d ( ' c h a n g e ' ) ; 
+         / / t o d o :   f i x   t h i s   -   m a k e   e v e n t   h a n d l e r   r e i n s t a l l   w o r k 
+         u p l o a d _ i n p u t . c h a n g e ( h a n d l e r ) ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . s h o w   =   f u n c t i o n   ( )   { 
+         / / h a c k   a r o u n d   t h e   a j a x F i l e U p l o a d   p l u g i n 
+         F i l e U p l o a d D i a l o g . s u p e r C l a s s _ . s h o w . c a l l ( t h i s ) ; 
+         v a r   h a n d l e r   =   t h i s . g e t S t a r t U p l o a d H a n d l e r ( ) ; 
+         t h i s . i n s t a l l F i l e U p l o a d H a n d l e r ( h a n d l e r ) ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . g e t U r l I n p u t E l e m e n t   =   f u n c t i o n   ( )   { 
+         r e t u r n   t h i s . _ u r l _ i n p u t . g e t E l e m e n t ( ) ; 
+ } ; 
+ 
+ / * 
+   *   a r g u m e n t   s t a r t U p l o a d H a n d l e r   i s   v e r y   s p e c i a l   i t   m u s t 
+   *   b e   a   f u n c t i o n   c a l l i n g   t h i s   o n e ! ! !   T o d o :   s e e   i f   t h e r e 
+   *   i s   a   m o r e   c i v i l i z e d   w a y   t o   d o   t h i s . 
+   * / 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . s t a r t F i l e U p l o a d   =   f u n c t i o n   ( s t a r t U p l o a d H a n d l e r )   { 
+ 
+         v a r   s p i n n e r   =   t h i s . _ s p i n n e r ; 
+         v a r   l a b e l   =   t h i s . _ l a b e l ; 
+ 
+         s p i n n e r . a j a x S t a r t ( f u n c t i o n   ( )   { 
+                 s p i n n e r . s h o w ( ) ; 
+                 l a b e l . h i d e ( ) ; 
+         } ) ; 
+         s p i n n e r . a j a x C o m p l e t e ( f u n c t i o n   ( )   { 
+                 s p i n n e r . h i d e ( ) ; 
+                 l a b e l . s h o w ( ) ; 
+         } ) ; 
+ 
+         / *   i m p o r t a n t ! ! !   u p l o a d   i n p u t   m u s t   b e   l o a d e d   b y   i d 
+           *   b e c a u s e   a j a x F i l e U p l o a d   m o n k e y - p a t c h e s   t h e   u p l o a d   f o r m   * / 
+         v a r   u p l o a d I n p u t   =   t h i s . g e t I n p u t E l e m e n t ( ) ; 
+         u p l o a d I n p u t . a j a x S t a r t ( f u n c t i o n   ( )   {   u p l o a d I n p u t . h i d e ( ) ;   } ) ; 
+         u p l o a d I n p u t . a j a x C o m p l e t e ( f u n c t i o n   ( )   {   u p l o a d I n p u t . s h o w ( ) ;   } ) ; 
+ 
+         / / v a r   l o c a l F i l e P a t h   =   u p l o a d _ i n p u t . v a l ( ) ; 
+ 
+         v a r   m e   =   t h i s ; 
+ 
+         $ . a j a x F i l e U p l o a d ( { 
+                 u r l :   a s k b o t . u r l s . u p l o a d , 
+                 s e c u r e u r i :   f a l s e , / / t o d o :   c h e c k   o n   h t t p s 
+                 f i l e E l e m e n t I d :   t h i s . g e t I n p u t I d ( ) , 
+                 d a t a T y p e :   ' x m l ' , 
+                 s u c c e s s :   f u n c t i o n   ( d a t a ,   s t a t u s )   { 
+ 
+                         v a r   f i l e U R L   =   $ ( d a t a ) . f i n d ( ' f i l e _ u r l ' ) . t e x t ( ) ; 
+                         v a r   o r i g F i l e N a m e   =   $ ( d a t a ) . f i n d ( ' o r i g _ f i l e _ n a m e ' ) . t e x t ( ) ; 
+                         v a r   n e w S t a t u s   =   i n t e r p o l a t e ( 
+                                                                 g e t t e x t ( ' U p l o a d e d   f i l e :   % s ' ) , 
+                                                                 [ o r i g F i l e N a m e ] 
+                                                         ) ; 
+                         / * 
+                         *   h o p e f u l l y   a   f i x   f o r   t h e   " f a k e p a t h "   i s s u e 
+                         *   h t t p s : / / w w w . m e d i a w i k i . o r g / w i k i / S p e c i a l : C o d e / M e d i a W i k i / 8 3 2 2 5 
+                         * / 
+                         f i l e U R L   =   f i l e U R L . r e p l a c e ( / \ w : . * \ \ ( . * ) $ / ,   ' $ 1 ' ) ; 
+                         v a r   e r r o r   =   $ ( d a t a ) . f i n d ( ' e r r o r ' ) . t e x t ( ) ; 
+                         i f   ( e r r o r   ! = =   ' ' )   { 
+                                 m e . s e t E r r o r T e x t ( e r r o r ) ; 
+                         }   e l s e   { 
+                                 m e . g e t U r l I n p u t E l e m e n t ( ) . a t t r ( ' v a l u e ' ,   f i l e U R L ) ; 
+                                 m e . s e t L a b e l T e x t ( n e w S t a t u s ) ; 
+                                 v a r   b u t t o n T e x t   =   g e t t e x t ( ' C h o o s e   a   d i f f e r e n t   f i l e ' ) ; 
+                                 i f   ( m e . g e t F i l e T y p e ( )   = = =   ' i m a g e ' )   { 
+                                         b u t t o n T e x t   =   g e t t e x t ( ' C h o o s e   a   d i f f e r e n t   i m a g e ' ) ; 
+                                 } 
+                                 m e . s e t B u t t o n T e x t ( b u t t o n T e x t ) ; 
+                         } 
+ 
+                         / *   r e - i n s t a l l   t h i s   a s   t h e   u p l o a d   e x t e n s i o n 
+                           *   w i l l   r e m o v e   t h e   h a n d l e r   t o   p r e v e n t   d o u b l e   u p l o a d i n g 
+                           *   t h i s   h a c k   i s   a   m a n i p u l a t i o n   a r o u n d   t h e 
+                           *   a j a x F i l e U p l o a d   j Q u e r y   p l u g i n .   * / 
+                         m e . i n s t a l l F i l e U p l o a d H a n d l e r ( s t a r t U p l o a d H a n d l e r ) ; 
+                 } , 
+                 e r r o r :   f u n c t i o n   ( d a t a ,   s t a t u s ,   e )   { 
+                         / *   r e - i n s t a l l   t h i s   a s   t h e   u p l o a d   e x t e n s i o n 
+                         *   w i l l   r e m o v e   t h e   h a n d l e r   t o   p r e v e n t   d o u b l e   u p l o a d i n g   * / 
+                         m e . s e t E r r o r T e x t ( g e t t e x t ( ' O o p s ,   l o o k s   l i k e   w e   h a d   a n   e r r o r .   S o r r y . ' ) ) ; 
+                         m e . i n s t a l l F i l e U p l o a d H a n d l e r ( s t a r t U p l o a d H a n d l e r ) ; 
+                 } 
+         } ) ; 
+         r e t u r n   f a l s e ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . g e t S t a r t U p l o a d H a n d l e r   =   f u n c t i o n   ( )   { 
+         v a r   m e   =   t h i s ; 
+         v a r   h a n d l e r   =   f u n c t i o n   ( )   { 
+                 / *   t h e   t r i c k   i s   t h a t   w e   n e e d   i n s i d e   t h e   f u n c t i o n   c a l l 
+                   *   t o   h a v e   a   r e f e r e n c e   t o   i t s e l f 
+                   *   i n   o r d e r   t o   r e i n s t a l l   t h e   h a n d l e r   l a t e r 
+                   *   b e c a u s e   a j a x F i l e U p l o a d   j q u e r y   e x t e n s i o n   m i g h t   b e   d e s t r o y i n g   i t   * / 
+                 r e t u r n   m e . s t a r t F i l e U p l o a d ( h a n d l e r ) ; 
+         } ; 
+         r e t u r n   h a n d l e r ; 
+ } ; 
+ 
+ F i l e U p l o a d D i a l o g . p r o t o t y p e . c r e a t e D o m   =   f u n c t i o n   ( )   { 
+ 
+         v a r   s u p e r C l a s s   =   F i l e U p l o a d D i a l o g . s u p e r C l a s s _ ; 
+ 
+         v a r   m e   =   t h i s ; 
+         s u p e r C l a s s . s e t A c c e p t H a n d l e r . c a l l ( t h i s ,   f u n c t i o n   ( )   { 
+                 v a r   u r l   =   $ . t r i m ( m e . g e t U r l ( ) ) ; 
+                 / / v a r   d e s c r i p t i o n   =   m e . g e t D e s c r i p t i o n ( ) ; 
+                 / / @ t o d o :   h a v e   u r l   c l e a n i n g   c o d e   h e r e 
+                 i f   ( u r l . l e n g t h   >   0 )   { 
+                         m e . r u n P o s t U p l o a d H a n d l e r ( u r l ) ; / / ,   d e s c r i p t i o n ) ; 
+                         m e . r e s e t I n p u t s ( ) ; 
+                 } 
+                 m e . h i d e ( ) ; 
+         } ) ; 
+         s u p e r C l a s s . s e t R e j e c t H a n d l e r . c a l l ( t h i s ,   f u n c t i o n   ( )   { 
+                 m e . r e s e t I n p u t s ( ) ; 
+                 m e . h i d e ( ) ; 
+         } ) ; 
+         s u p e r C l a s s . c r e a t e D o m . c a l l ( t h i s ) ; 
+ 
+         v a r   f o r m   =   t h i s . m a k e E l e m e n t ( ' f o r m ' ) ; 
+         f o r m . a d d C l a s s ( ' a j a x - f i l e - u p l o a d ' ) ; 
+         f o r m . c s s ( ' m a r g i n - b o t t o m ' ,   0 ) ; 
+         t h i s . p r e p e n d C o n t e n t ( f o r m ) ; 
+ 
+         / /   B r o w s e r   n a t i v e   f i l e   u p l o a d   f i e l d 
+         v a r   u p l o a d _ i n p u t   =   t h i s . m a k e E l e m e n t ( ' i n p u t ' ) ; 
+         u p l o a d _ i n p u t . a t t r ( { 
+                 i d :   t h i s . _ i n p u t _ i d , 
+                 t y p e :   ' f i l e ' , 
+                 n a m e :   ' f i l e - u p l o a d ' 
+                 / / s i z e :   2 6 ? ? ? 
+         } ) ; 
+         f o r m . a p p e n d ( u p l o a d _ i n p u t ) ; 
+         t h i s . _ u p l o a d _ i n p u t   =   u p l o a d _ i n p u t ; 
+ 
+         v a r   f a k e I n p u t   =   t h i s . m a k e E l e m e n t ( ' i n p u t ' ) ; 
+         f a k e I n p u t . a t t r ( ' t y p e ' ,   ' b u t t o n ' ) ; 
+         f a k e I n p u t . a d d C l a s s ( ' s u b m i t ' ) ; 
+         f a k e I n p u t . a d d C l a s s ( ' f a k e - f i l e - i n p u t ' ) ; 
+         v a r   b u t t o n T e x t   =   g e t t e x t ( ' C h o o s e   a   f i l e   t o   i n s e r t ' ) ; 
+         i f   ( t h i s . _ f i l e T y p e   = = =   ' i m a g e ' )   { 
+                 b u t t o n T e x t   =   g e t t e x t ( ' C h o o s e   a n   i m a g e   t o   i n s e r t ' ) ; 
+         } 
+         f a k e I n p u t . v a l ( b u t t o n T e x t ) ; 
+         t h i s . _ f a k e I n p u t   =   f a k e I n p u t ; 
+         f o r m . a p p e n d ( f a k e I n p u t ) ; 
+ 
+         s e t u p B u t t o n E v e n t H a n d l e r s ( f a k e I n p u t ,   f u n c t i o n   ( )   {   u p l o a d _ i n p u t . c l i c k ( ) ;   } ) ; 
+ 
+         / /   L a b e l   w h i c h   w i l l   a l s o   s e r v e   a s   s t a t u s   d i s p l a y 
+         v a r   l a b e l   =   t h i s . m a k e E l e m e n t ( ' l a b e l ' ) ; 
+         l a b e l . a t t r ( ' f o r ' ,   t h i s . _ i n p u t _ i d ) ; 
+         v a r   t y p e s   =   a s k b o t . s e t t i n g s . a l l o w e d U p l o a d F i l e T y p e s ; 
+         t y p e s   =   t y p e s . j o i n ( ' ,   ' ) ; 
+         l a b e l . h t m l ( g e t t e x t ( ' A l l o w e d   f i l e   t y p e s   a r e : ' )   +   '   '   +   t y p e s   +   ' . ' ) ; 
+         f o r m . a p p e n d ( l a b e l ) ; 
+         t h i s . _ l a b e l   =   l a b e l ; 
+ 
+         / /   T h e   u r l   i n p u t   t e x t   b o x ,   p r o b a b l y   u n u s e d   i n   f a c t 
+         v a r   u r l _ i n p u t   =   n e w   T i p p e d I n p u t ( ) ; 
+         u r l _ i n p u t . s e t I n s t r u c t i o n ( t h i s . _ u r l _ i n p u t _ t o o l t i p   | |   g e t t e x t ( ' O r   p a s t e   f i l e   u r l   h e r e ' ) ) ; 
+         v a r   u r l _ i n p u t _ e l e m e n t   =   u r l _ i n p u t . g e t E l e m e n t ( ) ; 
+         u r l _ i n p u t _ e l e m e n t . c s s ( { 
+                 ' w i d t h ' :   ' 2 0 0 p x ' , 
+                 ' d i s p l a y ' :   ' n o n e ' 
+         } ) ; 
+         f o r m . a p p e n d ( u r l _ i n p u t _ e l e m e n t ) ; 
+         / / f o r m . a p p e n d ( $ ( ' < b r / > ' ) ) ; 
+         t h i s . _ u r l _ i n p u t   =   u r l _ i n p u t ; 
+ 
+         / *   / / D e s c r i p t i o n   i n p u t   b o x 
+         v a r   d e s c r _ i n p u t   =   n e w   T i p p e d I n p u t ( ) ; 
+         d e s c r _ i n p u t . s e t I n s t r u c t i o n ( g e t t e x t ( ' D e s c r i b e   t h e   i m a g e   h e r e ' ) ) ; 
+         t h i s . m a k e E l e m e n t ( ' i n p u t ' ) ; 
+         f o r m . a p p e n d ( d e s c r _ i n p u t . g e t E l e m e n t ( ) ) ; 
+         f o r m . a p p e n d ( $ ( ' < b r / > ' ) ) ; 
+         t h i s . _ d e s c r i p t i o n _ i n p u t   =   d e s c r _ i n p u t ; 
+         * / 
+         v a r   s p i n n e r   =   t h i s . m a k e E l e m e n t ( ' i m g ' ) ; 
+         s p i n n e r . a t t r ( ' s r c ' ,   m e d i a U r l ( ' m e d i a / i m a g e s / a j a x - l o a d e r . g i f ' ) ) ; 
+         s p i n n e r . c s s ( ' d i s p l a y ' ,   ' n o n e ' ) ; 
+         s p i n n e r . a d d C l a s s ( ' s p i n n e r ' ) ; 
+         f o r m . a p p e n d ( s p i n n e r ) ; 
+         t h i s . _ s p i n n e r   =   s p i n n e r ; 
+ 
+         u p l o a d _ i n p u t . c h a n g e ( t h i s . g e t S t a r t U p l o a d H a n d l e r ( ) ) ; 
+ } ; 
+   J       https://faq.i3wm.org/m/default/media/js/utils/file_upload_dialog.js%3Fv=2     €!      €!                    Å    ÷    Ç    õ    Qö   ù   ö    ö   Á Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6	   Qö    5   Ç   6
+   Qö    5   Ç   6   Qö    5   Ç	   6   Qö    5   Ç
+   6   Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6   Qö    5   Ç   6   Qô•ê–†ÿ†’†’†’†’† ’†$’†(’†,’†1’†6’†:’†G’†M’†Q’†X’†_’†h’†Ä  Ø’†Ä  ª’†Ä  !   FileUploadDialog   inherits   ModalDialog   prototype   setFileType   getFileType   setButtonText)   setPostUploadHandler)   runPostUploadHandler   setInputId   getInputId   setErrorText   setLabelText%   setUrlInputTooltip   getUrl   resetInputs   getInputElement1   installFileUploadHandler	   show%   getUrlInputElement   startFileUpload+   getStartUploadHandler   createDomá!´!ˇˇˇˇ   !   FileUploadDialog          ´+íHç!´!       !   FileUploadDialogB  8      /                     5ûç!´!       M   FileUploadDialog.prototype.setFileTypeb   ¨  v  ¨     2           5ûç!´!       M   FileUploadDialog.prototype.getFileTypeb  ·    ÿ       2           5ûç!´!       Q   FileUploadDialog.prototype.setButtonTextb 9  b  0  b     4           5ûç!´!       _   FileUploadDialog.prototype.setPostUploadHandlerb †  ÷  ó  ÷     ;           5ûç!´!       _   FileUploadDialog.prototype.runPostUploadHandlerb   O    O      ;           5ûç!´!       K   FileUploadDialog.prototype.setInputIdb É  §  z  §  $   1           5ûç!´!       K   FileUploadDialog.prototype.getInputIdb  ÿ  ˘  œ  ˘  (   1           5ûç!´!       O   FileUploadDialog.prototype.setErrorTextb /  y  &  y  ,   3           5ûç!´!       O   FileUploadDialog.prototype.setLabelTextb Ø  ˚  ¶  ˚  1   3           5ûç!´!       [   FileUploadDialog.prototype.setUrlInputTooltipb 7  e  .  e  6   9           5ûç!´!       C   FileUploadDialog.prototype.getUrlb  ï  !  å  !  :   -   "        5ûç!´!       M   FileUploadDialog.prototype.resetInputsb  Â  O  ‹  O  G   2           5ûç!´!       U   FileUploadDialog.prototype.getInputElementb  à  µ    µ  M   6           5ûç!´!       g   FileUploadDialog.prototype.installFileUploadHandlerb ˜  ±  Ó  ±  Q   ?           5ûç!´!       ?   FileUploadDialog.prototype.showb  ﬂ  ü	  ÷  ü	  X   +           5ûç!´!       [   FileUploadDialog.prototype.getUrlInputElementb  €	  
+
+  “	  
+
+  _   9           5ûç!´!       U   FileUploadDialog.prototype.startFileUploadb ‡
+  ‘  ◊
+  ‘  h   6   b       %   startUploadHandler    spinner    label    uploadInput    me   B  V  é  M  é  m              5û   B  ≥  Î  ™  Î  q   "           5û   B  ∂  –  ≠  –  y   #           5û   B  ˘        z   &           5û   B   v    v  Ö      @        5û   B ê  ∏  á  ∏  •              5û 5ûç!´!       a   FileUploadDialog.prototype.getStartUploadHandlerb    z  
+  z  Ø   <   2          me    handler   B  F  c  =  c  ±              5û 5ûç!´!       I   FileUploadDialog.prototype.createDomb  ≠  Ÿ!  §  Ÿ!  ª   0   B          me    upload_input   B  .  Q  %  Q  ¿   4            5û   B  à  ø    ø      4           5û   B  o  ã  f  ã  Ï   1           5û 5ûöò;¯u*1pÒ      [*&Ò[*&Ú?2e[*'=   J    :https://faq.i3wm.org/m/default/media/js/utils/file_upload_dialog.js%3Fv=2 necko:classified 1 strongly-framed 1 security-info FnhllAKWRHGAlo+ESXykKAAAAAAAAAAAwAAAAAAAAEaphjojH6pBabDSgSnsfLHeAAQAAgAAAAAAAAAAAAAAAAAAAAAB4vFIJp5wRkeyPxAQ9RJGKPqbqVvKO0mKuIl8ec8o/uhmCjImkVxP+7sgiYWmMt8FvcOXmlQiTNWFiWlrbpbqgwAAAAAAAAoyMIIKLjCCCdSgAwIBAgIQPXLliLm882kZCaE1O2AJQTAKBggqhkjOPQQDAjCBkjELMAkGA1UEBhMCR0IxGzAZBgNVBAgTEkdyZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBxMHU2FsZm9yZDEaMBgGA1UEChMRQ09NT0RPIENBIExpbWl0ZWQxODA2BgNVBAMTL0NPTU9ETyBFQ0MgRG9tYWluIFZhbGlkYXRpb24gU2VjdXJlIFNlcnZlciBDQSAyMB4XDTE4MDYxODAwMDAwMFoXDTE4MTIyNTIzNTk1OVowazEhMB8GA1UECxMYRG9tYWluIENvbnRyb2wgVmFsaWRhdGVkMSEwHwYDVQQLExhQb3NpdGl2ZVNTTCBNdWx0aS1Eb21haW4xIzAhBgNVBAMTGnNuaTM3NTM5LmNsb3VkZmxhcmVzc2wuY29tMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE85/PEWijoj1UwV8dc2plaLU2Q94jh5XJyL7n86thOXVHJrf6I7Lin0f1gxqfxQTXlvIQ8UjAyx8CTcAC4LC3RqOCCDAwgggsMB8GA1UdIwQYMBaAFEAJYWfwvINxT94SCCxv1NQrdj2WMB0GA1UdDgQWBBQMSCk8MNsWyag4Jn6C3/a29fX7/TAOBgNVHQ8BAf8EBAMCB4AwDAYDVR0TAQH/BAIwADAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwTwYDVR0gBEgwRjA6BgsrBgEEAbIxAQICBzArMCkGCCsGAQUFBwIBFh1odHRwczovL3NlY3VyZS5jb21vZG8uY29tL0NQUzAIBgZngQwBAgEwVgYDVR0fBE8wTTBLoEmgR4ZFaHR0cDovL2NybC5jb21vZG9jYTQuY29tL0NPTU9ET0VDQ0RvbWFpblZhbGlkYXRpb25TZWN1cmVTZXJ2ZXJDQTIuY3JsMIGIBggrBgEFBQcBAQR8MHowUQYIKwYBBQUHMAKGRWh0dHA6Ly9jcnQuY29tb2RvY2E0LmNvbS9DT01PRE9FQ0NEb21haW5WYWxpZGF0aW9uU2VjdXJlU2VydmVyQ0EyLmNydDAlBggrBgEFBQcwAYYZaHR0cDovL29jc3AuY29tb2RvY2E0LmNvbTCCBW8GA1UdEQSCBWYwggVighpzbmkzNzUzOS5jbG91ZGZsYXJlc3NsLmNvbYISKi4xcGF0dGVybmhvbWUwLmdhgg8qLjU5ZGVza3RvcDIuZ3GCDyouNmRlc2lnbmhkMS5jZoISKi5hbGVydG9waW5pb24uY29tgiAqLmJjYXJkLXNlY3VyZS1sZGVudHZlcmZhaHJlbi5ydYINKi5ib2JvbHRzLmNvbYIUKi5jaGVhcHNhbmRpc2trcWQuZ2GCGSouY29tZXRvZ2V0aGVyYm93bmVzcy5jb22CFSouZGVza3RvcHdhbGw4d2FsbC5nYYIMKi5maHZpcHMuY29tgg4qLmZvanRva2xvay50a4IPKi5mcmVnYXQtc3BiLnJ1ggwqLmZyaXNvbnMuZnKCCiouZ292bm8ubWyCCiouaHJ5MjQuc2uCCiouaTN3bS5vcmeCDiouamN2YWVib29rLm1sgg4qLmtvdm50aWtpcy5jZoIUKi5sZXF1YXJ0aWVybGF0aW4uZnKCHCoubWFtbXV0bW91bnRhaW5zY2hvb2wuY28udWuCDioubW9iaWxlMzE1LmNmghEqLm1vdmllc2hlbHBlci5tbIIQKi5wYXR0ZXJuaGQ1Ni5nYYIbKi5wY2tleW5vdGlmaWNhdGlvbnMucmV2aWV3ggwqLnJpY2Zvc3MuZ3GCDyoucm9idXN0aXJjLm5ldIIXKi5zZWxmYnVpbGRuZXdob21lcy5jb22CEyouc3BtaW5zdHJ1bWVmbnQuZ3GCDSouc3V0YXplMjQuc2uCECoudG9tYm9ib2x0cy5jb22CDioudHJlbmRpZnkuY29tghIqLndhbHkta3Jhd2N6eWsucGyCECoud2hlaGVsYmFzZXMuZ2GCGyoud2luZG93c25vdy5hbHRlcnZpc3RhLm9yZ4IMKi54MTF2aXMub3JnghAqLnh4eHZvdGUucmV2aWV3gg4qLnphYmF2dm5lcy50a4IMKi56ZWtqdXIubmV0ghAxcGF0dGVybmhvbWUwLmdhgg01OWRlc2t0b3AyLmdxgg02ZGVzaWduaGQxLmNmghBhbGVydG9waW5pb24uY29tgh5iY2FyZC1zZWN1cmUtbGRlbnR2ZXJmYWhyZW4ucnWCC2JvYm9sdHMuY29tghJjaGVhcHNhbmRpc2trcWQuZ2GCF2NvbWV0b2dldGhlcmJvd25lc3MuY29tghNkZXNrdG9wd2FsbDh3YWxsLmdhggpmaHZpcHMuY29tggxmb2p0b2tsb2sudGuCDWZyZWdhdC1zcGIucnWCCmZyaXNvbnMuZnKCCGdvdm5vLm1sgghocnkyNC5za4IIaTN3bS5vcmeCDGpjdmFlYm9vay5tbIIMa292bnRpa2lzLmNmghJsZXF1YXJ0aWVybGF0aW4uZnKCGm1hbW11dG1vdW50YWluc2Nob29sLmNvLnVrggxtb2JpbGUzMTUuY2aCD21vdmllc2hlbHBlci5tbIIOcGF0dGVybmhkNTYuZ2GCGXBja2V5bm90aWZpY2F0aW9ucy5yZXZpZXeCCnJpY2Zvc3MuZ3GCDXJvYnVzdGlyYy5uZXSCFXNlbGZidWlsZG5ld2hvbWVzLmNvbYIRc3BtaW5zdHJ1bWVmbnQuZ3GCC3N1dGF6ZTI0LnNrgg50b21ib2JvbHRzLmNvbYIMdHJlbmRpZnkuY29tghB3YWx5LWtyYXdjenlrLnBsgg53aGVoZWxiYXNlcy5nYYIZd2luZG93c25vdy5hbHRlcnZpc3RhLm9yZ4IKeDExdmlzLm9yZ4IOeHh4dm90ZS5yZXZpZXeCDHphYmF2dm5lcy50a4IKemVranVyLm5ldDCCAQQGCisGAQQB1nkCBAIEgfUEgfIA8AB2AO5Lvbd1zmC64UJpH6vhnmajD35fsHLYgwDEe4l6qP3LAAABZBCprdMAAAQDAEcwRQIgIgozFgA49lPG0PTy86Gd/wuc3BOrr4+AFhLaI1INoscCIQCSdmTrrQGI2hjPPDxQeumP9FMB3vXdcMygJ7oZs8bEmQB2ANt0r+7LKeyx/so+cW0s5bmquzb3hHGDx12dTze2H79kAAABZBCprhEAAAQDAEcwRQIgRwAp0+HPf1ToWJOs12X8gDriAWDJgrWG+nDh8oBloxICIQC93XqUG41zYtM8a78fbxa8OImGK84WgyY3Xe+J89zA/TAKBggqhkjOPQQDAgNIADBFAiEAq+a7c5+0UydAQ3cOE8CWxz6yaKiF5AUBV5yKQY11SHoCIFq2GIYE+SKsAf129MqI3f5ipQLnUuqgN/VnAHydFnUiEwEDBAAAAAABAQAAAAAAAAZ4MjU1MTkAAAARRUNEU0EtUDI1Ni1TSEEyNTYBlZ+xZWUXSH+rm9iRO+Uxl650zaXNL0c/lvXwt//2LGgAAAADZgoyJpFcT/u7IImFpjLfBb3Dl5pUIkzVhYlpa26W6oMAAAAAAAAKMjCCCi4wggnUoAMCAQICED1y5Yi5vPNpGQmhNTtgCUEwCgYIKoZIzj0EAwIwgZIxCzAJBgNVBAYTAkdCMRswGQYDVQQIExJHcmVhdGVyIE1hbmNoZXN0ZXIxEDAOBgNVBAcTB1NhbGZvcmQxGjAYBgNVBAoTEUNPTU9ETyBDQSBMaW1pdGVkMTgwNgYDVQQDEy9DT01PRE8gRUNDIERvbWFpbiBWYWxpZGF0aW9uIFNlY3VyZSBTZXJ2ZXIgQ0EgMjAeFw0xODA2MTgwMDAwMDBaFw0xODEyMjUyMzU5NTlaMGsxITAfBgNVBAsTGERvbWFpbiBDb250cm9sIFZhbGlkYXRlZDEhMB8GA1UECxMYUG9zaXRpdmVTU0wgTXVsdGktRG9tYWluMSMwIQYDVQQDExpzbmkzNzUzOS5jbG91ZGZsYXJlc3NsLmNvbTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABPOfzxFoo6I9VMFfHXNqZWi1NkPeI4eVyci+5/OrYTl1Rya3+iOy4p9H9YMan8UE15byEPFIwMsfAk3AAuCwt0ajgggwMIIILDAfBgNVHSMEGDAWgBRACWFn8LyDcU/eEggsb9TUK3Y9ljAdBgNVHQ4EFgQUDEgpPDDbFsmoOCZ+gt/2tvX1+/0wDgYDVR0PAQH/BAQDAgeAMAwGA1UdEwEB/wQCMAAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCME8GA1UdIARIMEYwOgYLKwYBBAGyMQECAgcwKzApBggrBgEFBQcCARYdaHR0cHM6Ly9zZWN1cmUuY29tb2RvLmNvbS9DUFMwCAYGZ4EMAQIBMFYGA1UdHwRPME0wS6BJoEeGRWh0dHA6Ly9jcmwuY29tb2RvY2E0LmNvbS9DT01PRE9FQ0NEb21haW5WYWxpZGF0aW9uU2VjdXJlU2VydmVyQ0EyLmNybDCBiAYIKwYBBQUHAQEEfDB6MFEGCCsGAQUFBzAChkVodHRwOi8vY3J0LmNvbW9kb2NhNC5jb20vQ09NT0RPRUNDRG9tYWluVmFsaWRhdGlvblNlY3VyZVNlcnZlckNBMi5jcnQwJQYIKwYBBQUHMAGGGWh0dHA6Ly9vY3NwLmNvbW9kb2NhNC5jb20wggVvBgNVHREEggVmMIIFYoIac25pMzc1MzkuY2xvdWRmbGFyZXNzbC5jb22CEiouMXBhdHRlcm5ob21lMC5nYYIPKi41OWRlc2t0b3AyLmdxgg8qLjZkZXNpZ25oZDEuY2aCEiouYWxlcnRvcGluaW9uLmNvbYIgKi5iY2FyZC1zZWN1cmUtbGRlbnR2ZXJmYWhyZW4ucnWCDSouYm9ib2x0cy5jb22CFCouY2hlYXBzYW5kaXNra3FkLmdhghkqLmNvbWV0b2dldGhlcmJvd25lc3MuY29tghUqLmRlc2t0b3B3YWxsOHdhbGwuZ2GCDCouZmh2aXBzLmNvbYIOKi5mb2p0b2tsb2sudGuCDyouZnJlZ2F0LXNwYi5ydYIMKi5mcmlzb25zLmZyggoqLmdvdm5vLm1sggoqLmhyeTI0LnNrggoqLmkzd20ub3Jngg4qLmpjdmFlYm9vay5tbIIOKi5rb3ZudGlraXMuY2aCFCoubGVxdWFydGllcmxhdGluLmZyghwqLm1hbW11dG1vdW50YWluc2Nob29sLmNvLnVrgg4qLm1vYmlsZTMxNS5jZoIRKi5tb3ZpZXNoZWxwZXIubWyCECoucGF0dGVybmhkNTYuZ2GCGyoucGNrZXlub3RpZmljYXRpb25zLnJldmlld4IMKi5yaWNmb3NzLmdxgg8qLnJvYnVzdGlyYy5uZXSCFyouc2VsZmJ1aWxkbmV3aG9tZXMuY29tghMqLnNwbWluc3RydW1lZm50Lmdxgg0qLnN1dGF6ZTI0LnNrghAqLnRvbWJvYm9sdHMuY29tgg4qLnRyZW5kaWZ5LmNvbYISKi53YWx5LWtyYXdjenlrLnBsghAqLndoZWhlbGJhc2VzLmdhghsqLndpbmRvd3Nub3cuYWx0ZXJ2aXN0YS5vcmeCDCoueDExdmlzLm9yZ4IQKi54eHh2b3RlLnJldmlld4IOKi56YWJhdnZuZXMudGuCDCouemVranVyLm5ldIIQMXBhdHRlcm5ob21lMC5nYYINNTlkZXNrdG9wMi5ncYINNmRlc2lnbmhkMS5jZoIQYWxlcnRvcGluaW9uLmNvbYIeYmNhcmQtc2VjdXJlLWxkZW50dmVyZmFocmVuLnJ1ggtib2JvbHRzLmNvbYISY2hlYXBzYW5kaXNra3FkLmdhghdjb21ldG9nZXRoZXJib3duZXNzLmNvbYITZGVza3RvcHdhbGw4d2FsbC5nYYIKZmh2aXBzLmNvbYIMZm9qdG9rbG9rLnRrgg1mcmVnYXQtc3BiLnJ1ggpmcmlzb25zLmZygghnb3Zuby5tbIIIaHJ5MjQuc2uCCGkzd20ub3JnggxqY3ZhZWJvb2subWyCDGtvdm50aWtpcy5jZoISbGVxdWFydGllcmxhdGluLmZyghptYW1tdXRtb3VudGFpbnNjaG9vbC5jby51a4IMbW9iaWxlMzE1LmNmgg9tb3ZpZXNoZWxwZXIubWyCDnBhdHRlcm5oZDU2LmdhghlwY2tleW5vdGlmaWNhdGlvbnMucmV2aWV3ggpyaWNmb3NzLmdxgg1yb2J1c3RpcmMubmV0ghVzZWxmYnVpbGRuZXdob21lcy5jb22CEXNwbWluc3RydW1lZm50LmdxggtzdXRhemUyNC5za4IOdG9tYm9ib2x0cy5jb22CDHRyZW5kaWZ5LmNvbYIQd2FseS1rcmF3Y3p5ay5wbIIOd2hlaGVsYmFzZXMuZ2GCGXdpbmRvd3Nub3cuYWx0ZXJ2aXN0YS5vcmeCCngxMXZpcy5vcmeCDnh4eHZvdGUucmV2aWV3ggx6YWJhdnZuZXMudGuCCnpla2p1ci5uZXQwggEEBgorBgEEAdZ5AgQCBIH1BIHyAPAAdgDuS723dc5guuFCaR+r4Z5mow9+X7By2IMAxHuJeqj9ywAAAWQQqa3TAAAEAwBHMEUCICIKMxYAOPZTxtD08vOhnf8LnNwTq6+PgBYS2iNSDaLHAiEAknZk660BiNoYzzw8UHrpj/RTAd713XDMoCe6GbPGxJkAdgDbdK/uyynssf7KPnFtLOW5qrs294Rxg8ddnU83th+/ZAAAAWQQqa4RAAAEAwBHMEUCIEcAKdPhz39U6FiTrNdl/IA64gFgyYK1hvpw4fKAZaMSAiEAvd16lBuNc2LTPGu/H28WvDiJhivOFoMmN13vifPcwP0wCgYIKoZIzj0EAwIDSAAwRQIhAKvmu3OftFMnQEN3DhPAlsc+smioheQFAVecikGNdUh6AiBathiGBPkirAH9dvTKiN3+YqUC51LqoDf1ZwB8nRZ1ImYKMiaRXE/7uyCJhaYy3wW9w5eaVCJM1YWJaWtuluqDAAAAAAAAA6MwggOfMIIDJaADAgECAhBbJc5pB8QmVWbTOQyZqVStMAoGCCqGSM49BAMDMIGFMQswCQYDVQQGEwJHQjEbMBkGA1UECBMSR3JlYXRlciBNYW5jaGVzdGVyMRAwDgYDVQQHEwdTYWxmb3JkMRowGAYDVQQKExFDT01PRE8gQ0EgTGltaXRlZDErMCkGA1UEAxMiQ09NT0RPIEVDQyBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTAeFw0xNDA5MjUwMDAwMDBaFw0yOTA5MjQyMzU5NTlaMIGSMQswCQYDVQQGEwJHQjEbMBkGA1UECBMSR3JlYXRlciBNYW5jaGVzdGVyMRAwDgYDVQQHEwdTYWxmb3JkMRowGAYDVQQKExFDT01PRE8gQ0EgTGltaXRlZDE4MDYGA1UEAxMvQ09NT0RPIEVDQyBEb21haW4gVmFsaWRhdGlvbiBTZWN1cmUgU2VydmVyIENBIDIwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQCOBmBOslphHBZAo6oih8w37zeA/x5HTolLGtBIRiC6vk+SuQzzBLPKkP8DvJkAMDhJVCCJM22STgPJUeRSKSto4IBZjCCAWIwHwYDVR0jBBgwFoAUdXGnGUgZvJ2d6kFH35TESHeZ03kwHQYDVR0OBBYEFEAJYWfwvINxT94SCCxv1NQrdj2WMA4GA1UdDwEB/wQEAwIBhjASBgNVHRMBAf8ECDAGAQH/AgEAMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAbBgNVHSAEFDASMAYGBFUdIAAwCAYGZ4EMAQIBMEwGA1UdHwRFMEMwQaA/oD2GO2h0dHA6Ly9jcmwuY29tb2RvY2EuY29tL0NPTU9ET0VDQ0NlcnRpZmljYXRpb25BdXRob3JpdHkuY3JsMHIGCCsGAQUFBwEBBGYwZDA7BggrBgEFBQcwAoYvaHR0cDovL2NydC5jb21vZG9jYS5jb20vQ09NT0RPRUNDQWRkVHJ1c3RDQS5jcnQwJQYIKwYBBQUHMAGGGWh0dHA6Ly9vY3NwLmNvbW9kb2NhNC5jb20wCgYIKoZIzj0EAwMDaAAwZQIxAKxoRyWAE08TVsCiNwmXWlDE5+20YcsoigoRMqbicd8RAYlvB3ogZmsY0LkuQ/dSbwIwEoV8jhNmkgS6mkUJlEowYdFJ3G/r5y3Jic8eanzshc4wJVm6gXA0uDR/5wHR4stSZgoyJpFcT/u7IImFpjLfBb3Dl5pUIkzVhYlpa26W6oMAAAAAAAACjTCCAokwggIPoAMCAQICEB9Hr6piAHBQVEwBnptjmSowCgYIKoZIzj0EAwMwgYUxCzAJBgNVBAYTAkdCMRswGQYDVQQIExJHcmVhdGVyIE1hbmNoZXN0ZXIxEDAOBgNVBAcTB1NhbGZvcmQxGjAYBgNVBAoTEUNPTU9ETyBDQSBMaW1pdGVkMSswKQYDVQQDEyJDT01PRE8gRUNDIENlcnRpZmljYXRpb24gQXV0aG9yaXR5MB4XDTA4MDMwNjAwMDAwMFoXDTM4MDExODIzNTk1OVowgYUxCzAJBgNVBAYTAkdCMRswGQYDVQQIExJHcmVhdGVyIE1hbmNoZXN0ZXIxEDAOBgNVBAcTB1NhbGZvcmQxGjAYBgNVBAoTEUNPTU9ETyBDQSBMaW1pdGVkMSswKQYDVQQDEyJDT01PRE8gRUNDIENlcnRpZmljYXRpb24gQXV0aG9yaXR5MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEA0d7L3XJghWF+3XkkRbUq2KZ9T5SCwbOQQB/l+EKJDwdAQTuPdKNCZcM4HXk+vt3iir1A2BLNosWIxatCXH0SvQoULT+iBxuP2wvLwlZW6VbCzOZ4sM9iflqLO+y0wbpo0IwQDAdBgNVHQ4EFgQUdXGnGUgZvJ2d6kFH35TESHeZ03kwDgYDVR0PAQH/BAQDAgEGMA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwMDaAAwZQIxAO8DW3qst3gKcreI3/+1RhQJCvqg5n0IxhqHvRioc70mymAMnc6Zn89cDzDhvhQx6gIwFPSTPEmnM3qQRkezY30Tm063bxg3gFP+3SDgNZo20ccBuebc3fP/HSw6FlfZkjnWAAA= request-method GET request-Accept-Encoding gzip, deflate, br response-head HTTP/2.0 200 OK
+content-type: application/octet-stream
+content-length: 8667
+last-modified: Mon, 21 Dec 2015 08:00:44 GMT
+access-control-allow-origin: *
+x-github-request-id: F402:63E3:190F03E:2244E54:5B29114F
+accept-ranges: bytes
+date: Wed, 20 Jun 2018 10:05:36 GMT
+via: 1.1 varnish
+cache-control: max-age=600
+expires: Wed, 20 Jun 2018 01:42:59 GMT
+age: 524
+x-served-by: cache-bma1623-BMA
+x-cache: HIT
+x-cache-hits: 2
+x-timer: S1529489136.121148,VS0,VE4
+vary: Accept-Encoding
+x-fastly-request-id: 7c4397f26a99e9f67eabac776a10fe0eaa521999
+expect-ct: max-age=604800, report-uri="https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct"
+server: cloudflare
+cf-ray: 42dd6afcb8b73cd1-CPH
+X-Firefox-Spdy: h2
+ original-response-headers date: Tue, 19 Jun 2018 21:33:11 GMT
+content-type: application/octet-stream
+content-length: 8667
+last-modified: Mon, 21 Dec 2015 08:00:44 GMT
+access-control-allow-origin: *
+expires: Tue, 19 Jun 2018 14:31:03 GMT
+cache-control: max-age=600
+x-github-request-id: F402:63E3:190F03E:2244E54:5B29114F
+accept-ranges: bytes
+via: 1.1 varnish
+age: 0
+x-served-by: cache-bma1645-BMA
+x-cache: HIT
+x-cache-hits: 1
+x-timer: S1529443992.772133,VS0,VE130
+vary: Accept-Encoding
+x-fastly-request-id: 9ec19c752e4d564e0f3f04616e75d96d569500ae
+expect-ct: max-age=604800, report-uri="https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct"
+server: cloudflare
+cf-ray: 42d91cd47f9c3cad-CPH
+X-Firefox-Spdy: h2
+ net-response-time-onstart 161 net-response-time-onstop 161 alt-data 1;8667,javascript/moz-bytecode-20180607202626 alt-data-from-child 1   sÍ

@@ -1,0 +1,26 @@
+2018-06-20T08:32:02.538Z - platformBaseUrl = https://laptop-updates.brave.com/1/releases/dev/0.22.810/linux
+2018-06-20T08:32:02.539Z - updateUrl = https://laptop-updates.brave.com/1/releases/dev/0.22.810/linux
+2018-06-20T08:32:21.357Z - platformBaseUrl = https://laptop-updates.brave.com/1/releases/dev/0.22.810/linux
+2018-06-20T08:32:21.357Z - updateUrl = https://laptop-updates.brave.com/1/releases/dev/0.22.810/linux
+2018-06-20T08:34:21.358Z - checkForUpdates
+2018-06-20T08:34:21.358Z - lastCheckWOY = null
+2018-06-20T08:34:21.358Z - lastCheckYMD = null
+2018-06-20T08:34:21.358Z - lastCheckMonth = null
+2018-06-20T08:34:21.358Z - firstCheckMade = false
+2018-06-20T08:34:21.358Z - weekOfInstallation= null
+2018-06-20T08:34:21.358Z - promoCode = none
+2018-06-20T08:34:21.358Z - https://laptop-updates.brave.com/1/releases/dev/0.22.810/linux?daily=true&weekly=true&monthly=true&first=true&woi=&ref=none&accept_preview=false
+2018-06-20T08:34:21.588Z - update not available
+2018-06-20T08:42:33.055Z - platformBaseUrl = https://laptop-updates.brave.com/1/releases/dev/0.22.810/linux
+2018-06-20T08:42:33.055Z - updateUrl = https://laptop-updates.brave.com/1/releases/dev/0.22.810/linux
+2018-06-20T08:43:02.595Z - platformBaseUrl = https://laptop-updates.brave.com/1/releases/dev/0.22.810/linux
+2018-06-20T08:43:02.595Z - updateUrl = https://laptop-updates.brave.com/1/releases/dev/0.22.810/linux
+2018-06-20T08:45:02.598Z - checkForUpdates
+2018-06-20T08:45:02.599Z - lastCheckYMD = 2018-06-20
+2018-06-20T08:45:02.599Z - lastCheckWOY = 166
+2018-06-20T08:45:02.599Z - lastCheckMonth = 6
+2018-06-20T08:45:02.599Z - firstCheckMade = true
+2018-06-20T08:45:02.599Z - weekOfInstallation= 2018-06-18
+2018-06-20T08:45:02.599Z - promoCode = none
+2018-06-20T08:45:02.599Z - https://laptop-updates.brave.com/1/releases/dev/0.22.810/linux?daily=false&weekly=false&monthly=false&first=false&woi=2018-06-18&ref=none&accept_preview=false
+2018-06-20T08:45:02.744Z - update not available
